@@ -26,23 +26,37 @@ type Config struct {
 	pluginsConfig PluginsConfig
 }
 
-// FlagOverride represents all the global flags passed to the CF CLI
-type FlagOverride struct {
-	Verbose bool
+// BinaryVersion is the current version of the CF binary.
+func (config *Config) BinaryVersion() string {
+	return version.VersionString()
 }
 
-// detectedSettings are automatically detected settings determined by the CLI.
-type detectedSettings struct {
-	currentDirectory string
-	terminalWidth    int
-	tty              bool
+// IsTTY returns true based off of:
+//   - The $FORCE_TTY is set to true/t/1
+//   - Detected from the STDOUT stream
+func (config *Config) IsTTY() bool {
+	if config.ENV.ForceTTY != "" {
+		envVal, err := strconv.ParseBool(config.ENV.ForceTTY)
+		if err == nil {
+			return envVal
+		}
+	}
+
+	return config.detectedSettings.tty
+}
+
+// TerminalWidth returns the width of the terminal from when the config
+// was loaded. If the terminal width has changed since the config has loaded,
+// it will **not** return the new width.
+func (config *Config) TerminalWidth() int {
+	return config.detectedSettings.terminalWidth
 }
 
 // Verbose returns true if verbose should be displayed to terminal, in addition
-// a slice of full paths in which verbose text will appear. This is based off
-// of:
+// a slice of absolute paths in which verbose text will appear. This is based
+// off of:
 //   - The config file's trace value (true/false/file path)
-//   - The $CF_TRACE enviroment variable if set (true/false/file path)
+//   - The $CF_TRACE environment variable if set (true/false/file path)
 //   - The '-v/--verbose' global flag
 //   - Defaults to false
 func (config *Config) Verbose() (bool, []string) {
@@ -75,32 +89,11 @@ func (config *Config) Verbose() (bool, []string) {
 		if !filepath.IsAbs(path) {
 			filePath[i] = filepath.Join(config.detectedSettings.currentDirectory, path)
 		}
-	}
-
-	return verbose, filePath
-}
-
-// IsTTY returns true based off of:
-//   - The $FORCE_TTY is set to true/t/1
-//   - Detected from the STDOUT stream
-func (config *Config) IsTTY() bool {
-	if config.ENV.ForceTTY != "" {
-		envVal, err := strconv.ParseBool(config.ENV.ForceTTY)
+		resolvedPath, err := filepath.EvalSymlinks(filePath[i])
 		if err == nil {
-			return envVal
+			filePath[i] = resolvedPath
 		}
 	}
 
-	return config.detectedSettings.tty
-}
-
-// TerminalWidth returns the width of the terminal from when the config
-// was loaded. If the terminal width has changed since the config has loaded,
-// it will **not** return the new width.
-func (config *Config) TerminalWidth() int {
-	return config.detectedSettings.terminalWidth
-}
-
-func (config *Config) BinaryVersion() string {
-	return version.VersionString()
+	return verbose, filePath
 }

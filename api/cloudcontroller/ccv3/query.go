@@ -21,6 +21,8 @@ const (
 	SequenceIDFilter QueryKey = "sequence_ids"
 	// SpaceGUIDFilter is a query parameter for listing objects by Space GUID.
 	SpaceGUIDFilter QueryKey = "space_guids"
+	// StackFilter is a query parameter for listing objects by stack name
+	StackFilter QueryKey = "stacks"
 
 	// OrderBy is a query parameter to specify how to order objects.
 	OrderBy QueryKey = "order_by"
@@ -30,6 +32,10 @@ const (
 	// NameOrder is a query value for ordering by name. This value is used in
 	// conjunction with the OrderBy QueryKey.
 	NameOrder = "name"
+
+	// PositionOrder is a query value for ordering by position. This value is
+	// used in conjunction with the OrderBy QueryKey.
+	PositionOrder = "position"
 )
 
 // Query is additional settings that can be passed to some requests that can

@@ -13,7 +13,7 @@ import (
 	"github.com/onsi/gomega/ghttp"
 
 	"code.cloudfoundry.org/cli/cf/terminal/terminalfakes"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
 
 	"code.cloudfoundry.org/cli/cf/trace/tracefakes"
 	. "github.com/onsi/ginkgo"
@@ -465,8 +465,8 @@ var _ = Describe("CloudControllerQuotaRepository", func() {
 
 		It("updates an existing quota", func() {
 			quota := models.SpaceQuota{
-				GUID: "my-quota-guid",
-				Name: "amazing-quota",
+				GUID:                    "my-quota-guid",
+				Name:                    "amazing-quota",
 				NonBasicServicesAllowed: false,
 				ServicesLimit:           1,
 				RoutesLimit:             12,

@@ -8,20 +8,20 @@ import (
 	"code.cloudfoundry.org/cli/api/cloudcontroller"
 )
 
-// NewPaginatedResources returns a new PaginatedResources struct with the
-// given resource type.
-func NewPaginatedResources(exampleResource interface{}) *PaginatedResources {
-	return &PaginatedResources{
-		resourceType: reflect.TypeOf(exampleResource),
-	}
-}
-
 // PaginatedResources represents a page of resources returned by the Cloud
 // Controller.
 type PaginatedResources struct {
 	NextURL        string          `json:"next_url"`
 	ResourcesBytes json.RawMessage `json:"resources"`
 	resourceType   reflect.Type
+}
+
+// NewPaginatedResources returns a new PaginatedResources struct with the
+// given resource type.
+func NewPaginatedResources(exampleResource interface{}) *PaginatedResources {
+	return &PaginatedResources{
+		resourceType: reflect.TypeOf(exampleResource),
+	}
 }
 
 // Resources unmarshals JSON representing a page of resources and returns a
@@ -44,7 +44,7 @@ func (client Client) paginate(request *cloudcontroller.Request, obj interface{},
 	for {
 		wrapper := NewPaginatedResources(obj)
 		response := cloudcontroller.Response{
-			Result: &wrapper,
+			DecodeJSONResponseInto: &wrapper,
 		}
 
 		err := client.connection.Make(request, &response)

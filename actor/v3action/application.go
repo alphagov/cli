@@ -13,13 +13,19 @@ import (
 type Application struct {
 	Name                string
 	GUID                string
+	StackName           string
 	State               constant.ApplicationState
 	LifecycleType       constant.AppLifecycleType
 	LifecycleBuildpacks []string
+	SpaceGUID           string
 }
 
 func (app Application) Started() bool {
 	return app.State == constant.ApplicationStarted
+}
+
+func (app Application) Stopped() bool {
+	return app.State == constant.ApplicationStopped
 }
 
 func (actor Actor) DeleteApplicationByNameAndSpace(name string, spaceGUID string) (Warnings, error) {
@@ -77,6 +83,23 @@ func (actor Actor) GetApplicationsBySpace(spaceGUID string) ([]Application, Warn
 	return apps, Warnings(warnings), nil
 }
 
+// GetApplicationByGUIDs returns all applications with the provided GUIDs.
+func (actor Actor) GetApplicationsByGUIDs(appGUIDs ...string) ([]Application, Warnings, error) {
+	ccApps, warnings, err := actor.CloudControllerClient.GetApplications(
+		ccv3.Query{Key: ccv3.GUIDFilter, Values: appGUIDs},
+	)
+
+	if err != nil {
+		return []Application{}, Warnings(warnings), err
+	}
+
+	var apps []Application
+	for _, ccApp := range ccApps {
+		apps = append(apps, actor.convertCCToActorApplication(ccApp))
+	}
+	return apps, Warnings(warnings), nil
+}
+
 // CreateApplicationInSpace creates and returns the application with the given
 // name in the given space.
 func (actor Actor) CreateApplicationInSpace(app Application, spaceGUID string) (Application, Warnings, error) {
@@ -84,6 +107,7 @@ func (actor Actor) CreateApplicationInSpace(app Application, spaceGUID string) (
 		ccv3.Application{
 			LifecycleType:       app.LifecycleType,
 			LifecycleBuildpacks: app.LifecycleBuildpacks,
+			StackName:           app.StackName,
 			Name:                app.Name,
 			Relationships: ccv3.Relationships{
 				constant.RelationshipTypeSpace: ccv3.Relationship{GUID: spaceGUID},
@@ -115,6 +139,13 @@ func (actor Actor) StartApplication(appGUID string) (Application, Warnings, erro
 	}
 
 	return actor.convertCCToActorApplication(updatedApp), Warnings(warnings), nil
+}
+
+// RestartApplication restarts an application.
+func (actor Actor) RestartApplication(appGUID string) (Warnings, error) {
+	_, warnings, err := actor.CloudControllerClient.UpdateApplicationRestart(appGUID)
+
+	return Warnings(warnings), err
 }
 
 func (actor Actor) PollStart(appGUID string, warningsChannel chan<- Warnings) error {
@@ -151,6 +182,7 @@ func (actor Actor) PollStart(appGUID string, warningsChannel chan<- Warnings) er
 func (actor Actor) UpdateApplication(app Application) (Application, Warnings, error) {
 	ccApp := ccv3.Application{
 		GUID:                app.GUID,
+		StackName:           app.StackName,
 		LifecycleType:       app.LifecycleType,
 		LifecycleBuildpacks: app.LifecycleBuildpacks,
 	}
@@ -166,10 +198,12 @@ func (actor Actor) UpdateApplication(app Application) (Application, Warnings, er
 func (Actor) convertCCToActorApplication(app ccv3.Application) Application {
 	return Application{
 		GUID:                app.GUID,
+		StackName:           app.StackName,
 		LifecycleType:       app.LifecycleType,
 		LifecycleBuildpacks: app.LifecycleBuildpacks,
 		Name:                app.Name,
 		State:               app.State,
+		SpaceGUID:           app.Relationships[constant.RelationshipTypeSpace].GUID,
 	}
 }
 

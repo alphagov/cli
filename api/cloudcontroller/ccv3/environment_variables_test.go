@@ -14,7 +14,7 @@ var _ = Describe("EnvironmentVariables", func() {
 	var client *Client
 
 	BeforeEach(func() {
-		client = NewTestClient()
+		client, _ = NewTestClient()
 	})
 
 	Describe("UpdateApplicationEnvironmentVariables", func() {
@@ -30,7 +30,7 @@ var _ = Describe("EnvironmentVariables", func() {
 			patchedEnvVars, warnings, executeErr = client.UpdateApplicationEnvironmentVariables("some-app-guid", envVars)
 		})
 
-		Context("when the request errors", func() {
+		When("the request errors", func() {
 			BeforeEach(func() {
 				envVars = EnvironmentVariables{"my-var": {Value: "my-val", IsSet: true}}
 
@@ -55,16 +55,18 @@ var _ = Describe("EnvironmentVariables", func() {
 			})
 		})
 
-		Context("when the request succeeds", func() {
-			Context("when env variable is being set", func() {
+		When("the request succeeds", func() {
+			When("env variable is being set", func() {
 				BeforeEach(func() {
 					envVars = EnvironmentVariables{
-						"my-var": {Value: "my-val", IsSet: true},
+						"my-var":    {Value: "my-val", IsSet: true},
+						"delete-me": {},
 					}
 
 					expectedBody := map[string]interface{}{
-						"var": map[string]string{
-							"my-var": "my-val",
+						"var": map[string]interface{}{
+							"my-var":    "my-val",
+							"delete-me": nil,
 						},
 					}
 
@@ -94,7 +96,7 @@ var _ = Describe("EnvironmentVariables", func() {
 				})
 			})
 
-			Context("when env variable is being unset", func() {
+			When("env variable is being unset", func() {
 				BeforeEach(func() {
 					envVars = EnvironmentVariables{
 						"my-var": {Value: "", IsSet: false},

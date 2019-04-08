@@ -16,11 +16,15 @@ type Config interface {
 	APIVersion() string
 	BinaryName() string
 	BinaryVersion() string
+	CFPassword() string
+	CFUsername() string
 	ColorEnabled() configv3.ColorSetting
 	CurrentUser() (configv3.User, error)
+	CurrentUserName() (string, error)
 	DialTimeout() time.Duration
 	DockerPassword() string
 	Experimental() bool
+	ExperimentalLogin() bool
 	GetPlugin(pluginName string) (configv3.Plugin, bool)
 	GetPluginCaseInsensitive(pluginName string) (configv3.Plugin, bool)
 	HasTargetedOrganization() bool
@@ -36,10 +40,13 @@ type Config interface {
 	RefreshToken() string
 	RemovePlugin(string)
 	RequestRetryCount() int
+	RoutingEndpoint() string
 	SetAccessToken(token string)
+	SetMinCLIVersion(version string)
 	SetOrganizationInformation(guid string, name string)
 	SetRefreshToken(token string)
 	SetSpaceInformation(guid string, name string, allowSSH bool)
+	V7SetSpaceInformation(guid string, name string)
 	SetTargetInformation(api string, apiVersion string, auth string, minCLIVersion string, doppler string, routing string, skipSSLValidation bool)
 	SetTokenInformation(accessToken string, refreshToken string, sshOAuthClient string)
 	SetUAAClientCredentials(client string, clientSecret string)
@@ -51,6 +58,7 @@ type Config interface {
 	StartupTimeout() time.Duration
 	Target() string
 	TargetedOrganization() configv3.Organization
+	TargetedOrganizationName() string
 	TargetedSpace() configv3.Space
 	UAADisableKeepAlives() bool
 	UAAGrantType() string

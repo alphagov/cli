@@ -2,6 +2,7 @@ package commands_test
 
 import (
 	"errors"
+	"fmt"
 
 	"code.cloudfoundry.org/cli/cf/commandregistry"
 	"code.cloudfoundry.org/cli/cf/commands"
@@ -14,18 +15,20 @@ import (
 
 	"code.cloudfoundry.org/cli/cf/api/apifakes"
 	"code.cloudfoundry.org/cli/cf/api/stacks/stacksfakes"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
 	"os"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
+	uuid "github.com/nu7hatch/gouuid"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("CreateAppManifest", func() {
 	var (
+		appName        string
 		ui             *testterm.FakeUI
 		configRepo     coreconfig.Repository
 		appSummaryRepo *apifakes.FakeAppSummaryRepository
@@ -44,6 +47,9 @@ var _ = Describe("CreateAppManifest", func() {
 	)
 
 	BeforeEach(func() {
+		rand, err := uuid.NewV4()
+		Expect(err).ToNot(HaveOccurred())
+		appName = fmt.Sprintf("app-name-%s", rand)
 		ui = &testterm.FakeUI{}
 		configRepo = testconfig.NewRepositoryWithDefaults()
 		appSummaryRepo = new(apifakes.FakeAppSummaryRepository)
@@ -82,7 +88,7 @@ var _ = Describe("CreateAppManifest", func() {
 	Describe("Requirements", func() {
 		Context("when not provided exactly one arg", func() {
 			BeforeEach(func() {
-				flagContext.Parse("app-name", "extra-arg")
+				flagContext.Parse(appName, "extra-arg")
 			})
 
 			It("fails with usage", func() {
@@ -97,7 +103,7 @@ var _ = Describe("CreateAppManifest", func() {
 
 		Context("when provided exactly one arg", func() {
 			BeforeEach(func() {
-				flagContext.Parse("app-name")
+				flagContext.Parse(appName)
 			})
 
 			It("returns a LoginRequirement", func() {
@@ -127,12 +133,12 @@ var _ = Describe("CreateAppManifest", func() {
 		)
 
 		BeforeEach(func() {
-			err := flagContext.Parse("app-name")
+			err := flagContext.Parse(appName)
 			Expect(err).NotTo(HaveOccurred())
 			cmd.Requirements(factory, flagContext)
 
 			application = models.Application{}
-			application.Name = "app-name"
+			application.Name = appName
 		})
 
 		JustBeforeEach(func() {
@@ -140,7 +146,7 @@ var _ = Describe("CreateAppManifest", func() {
 		})
 
 		AfterEach(func() {
-			os.Remove("app-name_manifest.yml")
+			os.Remove(fmt.Sprintf("%s_manifest.yml", appName))
 		})
 
 		Context("when there is an app summary", func() {
@@ -177,7 +183,7 @@ var _ = Describe("CreateAppManifest", func() {
 				Expect(runCLIErr).NotTo(HaveOccurred())
 				Expect(fakeManifest.MemoryCallCount()).To(Equal(1))
 				name, memory := fakeManifest.MemoryArgsForCall(0)
-				Expect(name).To(Equal("app-name"))
+				Expect(name).To(Equal(appName))
 				Expect(memory).To(Equal(int64(1024)))
 			})
 
@@ -185,30 +191,8 @@ var _ = Describe("CreateAppManifest", func() {
 				Expect(runCLIErr).NotTo(HaveOccurred())
 				Expect(fakeManifest.InstancesCallCount()).To(Equal(1))
 				name, instances := fakeManifest.InstancesArgsForCall(0)
-				Expect(name).To(Equal("app-name"))
+				Expect(name).To(Equal(appName))
 				Expect(instances).To(Equal(2))
-			})
-
-			Context("when there are app ports specified", func() {
-				BeforeEach(func() {
-					application.AppPorts = []int{1111, 2222}
-					appSummaryRepo.GetSummaryReturns(application, nil)
-				})
-
-				It("sets app ports", func() {
-					Expect(runCLIErr).NotTo(HaveOccurred())
-					Expect(fakeManifest.AppPortsCallCount()).To(Equal(1))
-					name, appPorts := fakeManifest.AppPortsArgsForCall(0)
-					Expect(name).To(Equal("app-name"))
-					Expect(appPorts).To(Equal([]int{1111, 2222}))
-				})
-			})
-
-			Context("when app ports are not specified", func() {
-				It("does not set app ports", func() {
-					Expect(runCLIErr).NotTo(HaveOccurred())
-					Expect(fakeManifest.AppPortsCallCount()).To(Equal(0))
-				})
 			})
 
 			It("tries to get stacks", func() {
@@ -229,7 +213,7 @@ var _ = Describe("CreateAppManifest", func() {
 					Expect(runCLIErr).NotTo(HaveOccurred())
 					Expect(fakeManifest.StackCallCount()).To(Equal(1))
 					name, stackName := fakeManifest.StackArgsForCall(0)
-					Expect(name).To(Equal("app-name"))
+					Expect(name).To(Equal(appName))
 					Expect(stackName).To(Equal("the-stack-name"))
 				})
 			})
@@ -259,7 +243,7 @@ var _ = Describe("CreateAppManifest", func() {
 					Expect(runCLIErr).NotTo(HaveOccurred())
 					Expect(ui.Outputs()).To(ContainSubstrings(
 						[]string{"OK"},
-						[]string{"Manifest file created successfully at ./app-name_manifest.yml"},
+						[]string{fmt.Sprintf("Manifest file created successfully at ./%s_manifest.yml", appName)},
 					))
 				})
 			})
@@ -285,7 +269,7 @@ var _ = Describe("CreateAppManifest", func() {
 					Expect(runCLIErr).NotTo(HaveOccurred())
 					Expect(fakeManifest.StartCommandCallCount()).To(Equal(1))
 					name, command := fakeManifest.StartCommandArgsForCall(0)
-					Expect(name).To(Equal("app-name"))
+					Expect(name).To(Equal(appName))
 					Expect(command).To(Equal("app-command"))
 				})
 			})
@@ -300,7 +284,7 @@ var _ = Describe("CreateAppManifest", func() {
 					Expect(runCLIErr).NotTo(HaveOccurred())
 					Expect(fakeManifest.BuildpackURLCallCount()).To(Equal(1))
 					name, buildpack := fakeManifest.BuildpackURLArgsForCall(0)
-					Expect(name).To(Equal("app-name"))
+					Expect(name).To(Equal(appName))
 					Expect(buildpack).To(Equal("buildpack"))
 				})
 			})
@@ -323,11 +307,11 @@ var _ = Describe("CreateAppManifest", func() {
 					Expect(fakeManifest.ServiceCallCount()).To(Equal(2))
 
 					name, service := fakeManifest.ServiceArgsForCall(0)
-					Expect(name).To(Equal("app-name"))
+					Expect(name).To(Equal(appName))
 					Expect(service).To(Equal("sp1-name"))
 
 					name, service = fakeManifest.ServiceArgsForCall(1)
-					Expect(name).To(Equal("app-name"))
+					Expect(name).To(Equal(appName))
 					Expect(service).To(Equal("sp2-name"))
 				})
 			})
@@ -342,7 +326,7 @@ var _ = Describe("CreateAppManifest", func() {
 					Expect(runCLIErr).NotTo(HaveOccurred())
 					Expect(fakeManifest.HealthCheckTimeoutCallCount()).To(Equal(1))
 					name, timeout := fakeManifest.HealthCheckTimeoutArgsForCall(0)
-					Expect(name).To(Equal("app-name"))
+					Expect(name).To(Equal(appName))
 					Expect(timeout).To(Equal(5))
 				})
 			})
@@ -364,7 +348,7 @@ var _ = Describe("CreateAppManifest", func() {
 
 					for i := 0; i < 3; i++ {
 						name, k, v := fakeManifest.EnvironmentVarsArgsForCall(i)
-						Expect(name).To(Equal("app-name"))
+						Expect(name).To(Equal(appName))
 						actuals[k] = v
 					}
 
@@ -416,14 +400,14 @@ var _ = Describe("CreateAppManifest", func() {
 					Expect(fakeManifest.RouteCallCount()).To(Equal(2))
 
 					name, host, domainName, path, port := fakeManifest.RouteArgsForCall(0)
-					Expect(name).To(Equal("app-name"))
+					Expect(name).To(Equal(appName))
 					Expect(host).To(Equal("route-1-host"))
 					Expect(domainName).To(Equal("http-domain"))
 					Expect(path).To(Equal("path"))
 					Expect(port).To(Equal(0))
 
 					name, host, domainName, path, port = fakeManifest.RouteArgsForCall(1)
-					Expect(name).To(Equal("app-name"))
+					Expect(name).To(Equal(appName))
 					Expect(host).To(Equal(""))
 					Expect(domainName).To(Equal("tcp-domain"))
 					Expect(path).To(Equal(""))
@@ -441,7 +425,7 @@ var _ = Describe("CreateAppManifest", func() {
 					Expect(runCLIErr).NotTo(HaveOccurred())
 					Expect(fakeManifest.DiskQuotaCallCount()).To(Equal(1))
 					name, quota := fakeManifest.DiskQuotaArgsForCall(0)
-					Expect(name).To(Equal("app-name"))
+					Expect(name).To(Equal(appName))
 					Expect(quota).To(Equal(int64(1024)))
 				})
 			})
@@ -472,7 +456,7 @@ var _ = Describe("CreateAppManifest", func() {
 
 						Expect(fakeManifest.HealthCheckTypeCallCount()).To(Equal(1))
 						name, healthCheckType := fakeManifest.HealthCheckTypeArgsForCall(0)
-						Expect(name).To(Equal("app-name"))
+						Expect(name).To(Equal(appName))
 						Expect(healthCheckType).To(Equal("process"))
 						Expect(fakeManifest.HealthCheckHTTPEndpointCallCount()).To(Equal(0))
 					})
@@ -489,7 +473,7 @@ var _ = Describe("CreateAppManifest", func() {
 
 						Expect(fakeManifest.HealthCheckTypeCallCount()).To(Equal(1))
 						name, healthCheckType := fakeManifest.HealthCheckTypeArgsForCall(0)
-						Expect(name).To(Equal("app-name"))
+						Expect(name).To(Equal(appName))
 						Expect(healthCheckType).To(Equal("none"))
 						Expect(fakeManifest.HealthCheckHTTPEndpointCallCount()).To(Equal(0))
 					})
@@ -506,7 +490,7 @@ var _ = Describe("CreateAppManifest", func() {
 
 						Expect(fakeManifest.HealthCheckTypeCallCount()).To(Equal(1))
 						name, healthCheckType := fakeManifest.HealthCheckTypeArgsForCall(0)
-						Expect(name).To(Equal("app-name"))
+						Expect(name).To(Equal(appName))
 						Expect(healthCheckType).To(Equal("http"))
 					})
 
@@ -547,7 +531,7 @@ var _ = Describe("CreateAppManifest", func() {
 
 							Expect(fakeManifest.HealthCheckHTTPEndpointCallCount()).To(Equal(1))
 							name, healthCheckHTTPEndpoint := fakeManifest.HealthCheckHTTPEndpointArgsForCall(0)
-							Expect(name).To(Equal("app-name"))
+							Expect(name).To(Equal(appName))
 							Expect(healthCheckHTTPEndpoint).To(Equal("/some-endpoint"))
 						})
 					})

@@ -6,7 +6,6 @@ import (
 
 	"encoding/json"
 
-	"code.cloudfoundry.org/cli/cf"
 	"code.cloudfoundry.org/cli/cf/api/quotas"
 	"code.cloudfoundry.org/cli/cf/commandregistry"
 	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
@@ -67,14 +66,6 @@ func (cmd *UpdateQuota) Requirements(requirementsFactory requirements.Factory, f
 
 	reqs := []requirements.Requirement{
 		requirementsFactory.NewLoginRequirement(),
-	}
-
-	if fc.IsSet("a") {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement("Option '-a'", cf.OrgAppInstanceLimitMinimumAPIVersion))
-	}
-
-	if fc.IsSet("reserved-route-ports") {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement("Option '--reserved-route-ports'", cf.ReservedRoutePortsMinimumAPIVersion))
 	}
 
 	return reqs, nil

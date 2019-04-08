@@ -7,8 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	. "code.cloudfoundry.org/cli/actor/v3action"
+	"code.cloudfoundry.org/cli/actor/v3action/v3actionfakes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"testing"
 )
@@ -16,6 +19,20 @@ import (
 func TestV3Action(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "V3 Actions Suite")
+}
+
+var _ = BeforeEach(func() {
+	log.SetLevel(log.PanicLevel)
+})
+
+func NewTestActor() (*Actor, *v3actionfakes.FakeCloudControllerClient, *v3actionfakes.FakeConfig, *v3actionfakes.FakeSharedActor, *v3actionfakes.FakeUAAClient) {
+	fakeCloudControllerClient := new(v3actionfakes.FakeCloudControllerClient)
+	fakeConfig := new(v3actionfakes.FakeConfig)
+	fakeSharedActor := new(v3actionfakes.FakeSharedActor)
+	fakeUAAClient := new(v3actionfakes.FakeUAAClient)
+	actor := NewActor(fakeCloudControllerClient, fakeConfig, fakeSharedActor, fakeUAAClient)
+
+	return actor, fakeCloudControllerClient, fakeConfig, fakeSharedActor, fakeUAAClient
 }
 
 // Thanks to Svett Ralchev

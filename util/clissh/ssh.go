@@ -17,19 +17,11 @@ import (
 	"syscall"
 	"time"
 
-	"code.cloudfoundry.org/cli/util/clissh/sigwinch"
+	"code.cloudfoundry.org/cli/cf/ssh/sigwinch"
 	"code.cloudfoundry.org/cli/util/clissh/ssherror"
 	"github.com/moby/moby/pkg/term"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
-)
-
-type TTYRequest int
-
-const (
-	RequestTTYAuto TTYRequest = iota
-	RequestTTYNo
-	RequestTTYYes
-	RequestTTYForce
 )
 
 const (
@@ -43,52 +35,6 @@ const (
 type LocalPortForward struct {
 	LocalAddress  string
 	RemoteAddress string
-}
-
-//go:generate counterfeiter . SecureDialer
-
-type SecureDialer interface {
-	Dial(network, address string, config *ssh.ClientConfig) (SecureClient, error)
-}
-
-//go:generate counterfeiter . SecureClient
-
-type SecureClient interface {
-	NewSession() (SecureSession, error)
-	Conn() ssh.Conn
-	Dial(network, address string) (net.Conn, error)
-	Wait() error
-	Close() error
-}
-
-//go:generate counterfeiter . TerminalHelper
-
-type TerminalHelper interface {
-	GetFdInfo(in interface{}) (fd uintptr, isTerminal bool)
-	SetRawTerminal(fd uintptr) (*term.State, error)
-	RestoreTerminal(fd uintptr, state *term.State) error
-	GetWinsize(fd uintptr) (*term.Winsize, error)
-	StdStreams() (stdin io.ReadCloser, stdout io.Writer, stderr io.Writer)
-}
-
-//go:generate counterfeiter . ListenerFactory
-
-type ListenerFactory interface {
-	Listen(network, address string) (net.Listener, error)
-}
-
-//go:generate counterfeiter . SecureSession
-
-type SecureSession interface {
-	RequestPty(term string, height, width int, termModes ssh.TerminalModes) error
-	SendRequest(name string, wantReply bool, payload []byte) (bool, error)
-	StdinPipe() (io.WriteCloser, error)
-	StdoutPipe() (io.Reader, error)
-	StderrPipe() (io.Reader, error)
-	Start(command string) error
-	Shell() error
-	Wait() error
-	Close() error
 }
 
 type SecureShell struct {
@@ -129,6 +75,13 @@ func NewSecureShell(
 	}
 }
 
+func (c *SecureShell) Close() error {
+	for _, listener := range c.localListeners {
+		listener.Close()
+	}
+	return c.secureClient.Close()
+}
+
 func (c *SecureShell) Connect(username string, passcode string, appSSHEndpoint string, appSSHHostKeyFingerprint string, skipHostValidation bool) error {
 	hostKeyCallbackFunction := fingerprintCallback(skipHostValidation, appSSHHostKeyFingerprint)
 
@@ -148,75 +101,6 @@ func (c *SecureShell) Connect(username string, passcode string, appSSHEndpoint s
 
 	c.secureClient = secureClient
 	return nil
-}
-
-func (c *SecureShell) Close() error {
-	for _, listener := range c.localListeners {
-		listener.Close()
-	}
-	return c.secureClient.Close()
-}
-
-func (c *SecureShell) LocalPortForward(localPortForwardSpecs []LocalPortForward) error {
-	for _, spec := range localPortForwardSpecs {
-		listener, err := c.listenerFactory.Listen("tcp", spec.LocalAddress)
-		if err != nil {
-			return err
-		}
-		c.localListeners = append(c.localListeners, listener)
-
-		go c.localForwardAcceptLoop(listener, spec.RemoteAddress)
-	}
-
-	return nil
-}
-
-func (c *SecureShell) localForwardAcceptLoop(listener net.Listener, addr string) {
-	defer listener.Close()
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			return
-		}
-
-		go c.handleForwardConnection(conn, addr)
-	}
-}
-
-func (c *SecureShell) handleForwardConnection(conn net.Conn, targetAddr string) {
-	defer conn.Close()
-
-	target, err := c.secureClient.Dial("tcp", targetAddr)
-	if err != nil {
-		fmt.Printf("connect to %s failed: %s\n", targetAddr, err.Error())
-		return
-	}
-	defer target.Close()
-
-	wg := &sync.WaitGroup{}
-	wg.Add(2)
-
-	go copyAndClose(wg, conn, target)
-	go copyAndClose(wg, target, conn)
-	wg.Wait()
-}
-
-func copyAndClose(wg *sync.WaitGroup, dest io.WriteCloser, src io.Reader) {
-	_, _ = io.Copy(dest, src)
-	_ = dest.Close()
-	if wg != nil {
-		wg.Done()
-	}
-}
-
-func copyAndDone(wg *sync.WaitGroup, dest io.Writer, src io.Reader) {
-	_, _ = io.Copy(dest, src)
-	wg.Done()
 }
 
 func (c *SecureShell) InteractiveSession(commands []string, terminalRequest TTYRequest) error {
@@ -263,7 +147,10 @@ func (c *SecureShell) InteractiveSession(commands []string, terminalRequest TTYR
 		var state *term.State
 		state, err = c.terminalHelper.SetRawTerminal(stdinFd)
 		if err == nil {
-			defer c.terminalHelper.RestoreTerminal(stdinFd, state)
+			defer func() {
+				err := c.terminalHelper.RestoreTerminal(stdinFd, state)
+				log.Errorln("restore terminal", err)
+			}()
 		}
 	}
 
@@ -318,6 +205,20 @@ func (c *SecureShell) InteractiveSession(commands []string, terminalRequest TTYR
 	return result
 }
 
+func (c *SecureShell) LocalPortForward(localPortForwardSpecs []LocalPortForward) error {
+	for _, spec := range localPortForwardSpecs {
+		listener, err := c.listenerFactory.Listen("tcp", spec.LocalAddress)
+		if err != nil {
+			return err
+		}
+		c.localListeners = append(c.localListeners, listener)
+
+		go c.localForwardAcceptLoop(listener, spec.RemoteAddress)
+	}
+
+	return nil
+}
+
 func (c *SecureShell) Wait() error {
 	keepaliveStopCh := make(chan struct{})
 	defer close(keepaliveStopCh)
@@ -327,19 +228,130 @@ func (c *SecureShell) Wait() error {
 	return c.secureClient.Wait()
 }
 
-func md5Fingerprint(key ssh.PublicKey) string {
-	sum := md5.Sum(key.Marshal())
-	return strings.Replace(fmt.Sprintf("% x", sum), " ", ":", -1)
+func (c *SecureShell) getWindowDimensions(terminalFd uintptr) (width int, height int) {
+	winSize, err := c.terminalHelper.GetWinsize(terminalFd)
+	if err != nil {
+		winSize = &term.Winsize{
+			Width:  80,
+			Height: 43,
+		}
+	}
+
+	return int(winSize.Width), int(winSize.Height)
 }
 
-func hexSha1Fingerprint(key ssh.PublicKey) string {
-	sum := sha1.Sum(key.Marshal())
-	return strings.Replace(fmt.Sprintf("% x", sum), " ", ":", -1)
+func (c *SecureShell) handleForwardConnection(conn net.Conn, targetAddr string) {
+	defer conn.Close()
+
+	target, err := c.secureClient.Dial("tcp", targetAddr)
+	if err != nil {
+		fmt.Printf("connect to %s failed: %s\n", targetAddr, err.Error())
+		return
+	}
+	defer target.Close()
+
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
+	go copyAndClose(wg, conn, target)
+	go copyAndClose(wg, target, conn)
+	wg.Wait()
+}
+
+func (c *SecureShell) localForwardAcceptLoop(listener net.Listener, addr string) {
+	defer listener.Close()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			return
+		}
+
+		go c.handleForwardConnection(conn, addr)
+	}
+}
+
+func (c *SecureShell) resize(resized <-chan os.Signal, session SecureSession, terminalFd uintptr) {
+	type resizeMessage struct {
+		Width       uint32
+		Height      uint32
+		PixelWidth  uint32
+		PixelHeight uint32
+	}
+
+	var previousWidth, previousHeight int
+
+	for range resized {
+		width, height := c.getWindowDimensions(terminalFd)
+
+		if width == previousWidth && height == previousHeight {
+			continue
+		}
+
+		message := resizeMessage{
+			Width:  uint32(width),
+			Height: uint32(height),
+		}
+
+		_, err := session.SendRequest("window-change", false, ssh.Marshal(message))
+		if err != nil {
+			log.Errorln("window-change:", err)
+		}
+
+		previousWidth = width
+		previousHeight = height
+	}
+}
+
+func (c *SecureShell) shouldAllocateTerminal(commands []string, terminalRequest TTYRequest, stdinIsTerminal bool) bool {
+	switch terminalRequest {
+	case RequestTTYForce:
+		return true
+	case RequestTTYNo:
+		return false
+	case RequestTTYYes:
+		return stdinIsTerminal
+	case RequestTTYAuto:
+		return len(commands) == 0 && stdinIsTerminal
+	default:
+		return false
+	}
+}
+
+func (c *SecureShell) terminalType() string {
+	term := os.Getenv("TERM")
+	if term == "" {
+		term = "xterm"
+	}
+	return term
 }
 
 func base64Sha256Fingerprint(key ssh.PublicKey) string {
 	sum := sha256.Sum256(key.Marshal())
 	return base64.RawStdEncoding.EncodeToString(sum[:])
+}
+
+func copyAndClose(wg *sync.WaitGroup, dest io.WriteCloser, src io.Reader) {
+	_, err := io.Copy(dest, src)
+	if err != nil {
+		log.Errorln("copy and close:", err)
+	}
+	_ = dest.Close()
+	if wg != nil {
+		wg.Done()
+	}
+}
+
+func copyAndDone(wg *sync.WaitGroup, dest io.Writer, src io.Reader) {
+	_, err := io.Copy(dest, src)
+	if err != nil {
+		log.Errorln("copy and done:", err)
+	}
+	wg.Done()
 }
 
 func fingerprintCallback(skipHostValidation bool, expectedFingerprint string) ssh.HostKeyCallback {
@@ -371,55 +383,19 @@ func fingerprintCallback(skipHostValidation bool, expectedFingerprint string) ss
 	}
 }
 
-func (c *SecureShell) shouldAllocateTerminal(commands []string, terminalRequest TTYRequest, stdinIsTerminal bool) bool {
-	switch terminalRequest {
-	case RequestTTYForce:
-		return true
-	case RequestTTYNo:
-		return false
-	case RequestTTYYes:
-		return stdinIsTerminal
-	case RequestTTYAuto:
-		return len(commands) == 0 && stdinIsTerminal
-	default:
-		return false
-	}
-}
-
-func (c *SecureShell) resize(resized <-chan os.Signal, session SecureSession, terminalFd uintptr) {
-	type resizeMessage struct {
-		Width       uint32
-		Height      uint32
-		PixelWidth  uint32
-		PixelHeight uint32
-	}
-
-	var previousWidth, previousHeight int
-
-	for range resized {
-		width, height := c.getWindowDimensions(terminalFd)
-
-		if width == previousWidth && height == previousHeight {
-			continue
-		}
-
-		message := resizeMessage{
-			Width:  uint32(width),
-			Height: uint32(height),
-		}
-
-		_, _ = session.SendRequest("window-change", false, ssh.Marshal(message))
-
-		previousWidth = width
-		previousHeight = height
-	}
+func hexSha1Fingerprint(key ssh.PublicKey) string {
+	sum := sha1.Sum(key.Marshal())
+	return strings.Replace(fmt.Sprintf("% x", sum), " ", ":", -1)
 }
 
 func keepalive(conn ssh.Conn, ticker *time.Ticker, stopCh chan struct{}) {
 	for {
 		select {
 		case <-ticker.C:
-			_, _, _ = conn.SendRequest("keepalive@cloudfoundry.org", true, nil)
+			_, _, err := conn.SendRequest("keepalive@cloudfoundry.org", true, nil)
+			if err != nil {
+				log.Errorln("err sending keep alive:", err)
+			}
 		case <-stopCh:
 			ticker.Stop()
 			return
@@ -427,22 +403,7 @@ func keepalive(conn ssh.Conn, ticker *time.Ticker, stopCh chan struct{}) {
 	}
 }
 
-func (c *SecureShell) terminalType() string {
-	term := os.Getenv("TERM")
-	if term == "" {
-		term = "xterm"
-	}
-	return term
-}
-
-func (c *SecureShell) getWindowDimensions(terminalFd uintptr) (width int, height int) {
-	winSize, err := c.terminalHelper.GetWinsize(terminalFd)
-	if err != nil {
-		winSize = &term.Winsize{
-			Width:  80,
-			Height: 43,
-		}
-	}
-
-	return int(winSize.Width), int(winSize.Height)
+func md5Fingerprint(key ssh.PublicKey) string {
+	sum := md5.Sum(key.Marshal())
+	return strings.Replace(fmt.Sprintf("% x", sum), " ", ":", -1)
 }

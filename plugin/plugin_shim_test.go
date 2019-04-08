@@ -4,9 +4,9 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"code.cloudfoundry.org/cli/cf/util/testhelpers/rpcserver"
+	"code.cloudfoundry.org/cli/cf/util/testhelpers/rpcserver/rpcserverfakes"
 	"code.cloudfoundry.org/cli/plugin"
-	"code.cloudfoundry.org/cli/util/testhelpers/rpcserver"
-	"code.cloudfoundry.org/cli/util/testhelpers/rpcserver/rpcserverfakes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -67,7 +67,7 @@ var _ = Describe("Command", func() {
 					Expect(rpcHandlers.IsMinCliVersionCallCount()).To(Equal(1))
 				})
 
-				Context("when the min cli version is not met", func() {
+				When("the min cli version is not met", func() {
 					BeforeEach(func() {
 						rpcHandlers.IsMinCliVersionStub = func(_ string, result *bool) error {
 							*result = false

@@ -14,10 +14,10 @@ import (
 	"github.com/blang/semver"
 
 	"code.cloudfoundry.org/cli/cf/api/apifakes"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -102,9 +102,9 @@ var _ = Describe("CreateUserProvidedService", func() {
 			})
 		})
 
-		Context("when provided the -r flag", func() {
+		Context("when provided the -t flag", func() {
 			BeforeEach(func() {
-				flagContext.Parse("service-instance", "-r", "route-service-url")
+				flagContext.Parse("service-instance", "-t", "tag,a,service")
 			})
 
 			It("returns a MinAPIVersionRequirement", func() {
@@ -114,8 +114,8 @@ var _ = Describe("CreateUserProvidedService", func() {
 				Expect(actualRequirements).To(ContainElement(minAPIVersionRequirement))
 
 				feature, requiredVersion := factory.NewMinAPIVersionRequirementArgsForCall(0)
-				Expect(feature).To(Equal("Option '-r'"))
-				expectedRequiredVersion, err := semver.Make("2.51.0")
+				Expect(feature).To(Equal("Option '-t'"))
+				expectedRequiredVersion, err := semver.Make("2.104.0")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(requiredVersion).To(Equal(expectedRequiredVersion))
 			})
@@ -145,11 +145,12 @@ var _ = Describe("CreateUserProvidedService", func() {
 		It("tries to create the user provided service instance", func() {
 			Expect(runCLIErr).NotTo(HaveOccurred())
 			Expect(serviceInstanceRepo.CreateCallCount()).To(Equal(1))
-			name, drainURL, routeServiceURL, credentialsMap := serviceInstanceRepo.CreateArgsForCall(0)
+			name, drainURL, routeServiceURL, credentialsMap, tags := serviceInstanceRepo.CreateArgsForCall(0)
 			Expect(name).To(Equal("service-instance"))
 			Expect(drainURL).To(Equal(""))
 			Expect(routeServiceURL).To(Equal(""))
 			Expect(credentialsMap).To(Equal(map[string]interface{}{}))
+			Expect(tags).To(Equal([]string{}))
 		})
 
 		Context("when creating the user provided service instance succeeds", func() {
@@ -184,7 +185,7 @@ var _ = Describe("CreateUserProvidedService", func() {
 			It("tries to create the user provided service instance with the drain url", func() {
 				Expect(runCLIErr).NotTo(HaveOccurred())
 				Expect(serviceInstanceRepo.CreateCallCount()).To(Equal(1))
-				_, drainURL, _, _ := serviceInstanceRepo.CreateArgsForCall(0)
+				_, drainURL, _, _, _ := serviceInstanceRepo.CreateArgsForCall(0)
 				Expect(drainURL).To(Equal("drain-url"))
 			})
 		})
@@ -197,7 +198,7 @@ var _ = Describe("CreateUserProvidedService", func() {
 			It("tries to create the user provided service instance with the route service url", func() {
 				Expect(runCLIErr).NotTo(HaveOccurred())
 				Expect(serviceInstanceRepo.CreateCallCount()).To(Equal(1))
-				_, _, routeServiceURL, _ := serviceInstanceRepo.CreateArgsForCall(0)
+				_, _, routeServiceURL, _, _ := serviceInstanceRepo.CreateArgsForCall(0)
 				Expect(routeServiceURL).To(Equal("route-service-url"))
 			})
 		})
@@ -210,7 +211,7 @@ var _ = Describe("CreateUserProvidedService", func() {
 			It("tries to create the user provided service instance with the credentials", func() {
 				Expect(runCLIErr).NotTo(HaveOccurred())
 				Expect(serviceInstanceRepo.CreateCallCount()).To(Equal(1))
-				_, _, _, credentialsMap := serviceInstanceRepo.CreateArgsForCall(0)
+				_, _, _, credentialsMap, _ := serviceInstanceRepo.CreateArgsForCall(0)
 				Expect(credentialsMap).To(Equal(map[string]interface{}{
 					"some": "json",
 				}))
@@ -238,7 +239,7 @@ var _ = Describe("CreateUserProvidedService", func() {
 			It("tries to create the user provided service instance with the credentials", func() {
 				Expect(runCLIErr).NotTo(HaveOccurred())
 				Expect(serviceInstanceRepo.CreateCallCount()).To(Equal(1))
-				_, _, _, credentialsMap := serviceInstanceRepo.CreateArgsForCall(0)
+				_, _, _, credentialsMap, _ := serviceInstanceRepo.CreateArgsForCall(0)
 				Expect(credentialsMap).To(Equal(map[string]interface{}{
 					"some": "json",
 				}))
@@ -263,11 +264,24 @@ var _ = Describe("CreateUserProvidedService", func() {
 				Expect(runCLIErr).NotTo(HaveOccurred())
 
 				Expect(serviceInstanceRepo.CreateCallCount()).To(Equal(1))
-				_, _, _, credentialsMap := serviceInstanceRepo.CreateArgsForCall(0)
+				_, _, _, credentialsMap, _ := serviceInstanceRepo.CreateArgsForCall(0)
 				Expect(credentialsMap).To(Equal(map[string]interface{}{
 					"key1": "value1",
 					"key2": "value2",
 				}))
+			})
+		})
+
+		Context("when passing in tags", func() {
+			BeforeEach(func() {
+				flagContext.Parse("service-instance", "-t", "tag1, tag2, tag3, tag4")
+			})
+
+			It("sucessfully creates a service instance and passes the tags as json", func() {
+				Expect(runCLIErr).NotTo(HaveOccurred())
+				Expect(serviceInstanceRepo.CreateCallCount()).To(Equal(1))
+				_, _, _, _, tags := serviceInstanceRepo.CreateArgsForCall(0)
+				Expect(tags).To(ConsistOf("tag1", "tag2", "tag3", "tag4"))
 			})
 		})
 	})

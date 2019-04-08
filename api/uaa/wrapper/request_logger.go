@@ -40,12 +40,6 @@ func NewRequestLogger(output RequestLoggerOutput) *RequestLogger {
 	}
 }
 
-// Wrap sets the connection on the RequestLogger and returns itself
-func (logger *RequestLogger) Wrap(innerconnection uaa.Connection) uaa.Connection {
-	logger.connection = innerconnection
-	return logger
-}
-
 // Make records the request and the response to UI
 func (logger *RequestLogger) Make(request *http.Request, passedResponse *uaa.Response) error {
 	err := logger.displayRequest(request)
@@ -63,6 +57,12 @@ func (logger *RequestLogger) Make(request *http.Request, passedResponse *uaa.Res
 	}
 
 	return err
+}
+
+// Wrap sets the connection on the RequestLogger and returns itself
+func (logger *RequestLogger) Wrap(innerconnection uaa.Connection) uaa.Connection {
+	logger.connection = innerconnection
+	return logger
 }
 
 func (logger *RequestLogger) displayRequest(request *http.Request) error {
@@ -134,7 +134,7 @@ func (logger *RequestLogger) displayResponse(passedResponse *uaa.Response) error
 
 func (logger *RequestLogger) displaySortedHeaders(headers http.Header) error {
 	keys := []string{}
-	for key, _ := range headers {
+	for key := range headers {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)

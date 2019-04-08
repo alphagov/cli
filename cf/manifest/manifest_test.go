@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 )
 
 func NewManifest(path string, data generic.Map) (m *manifest.Manifest) {
@@ -17,6 +17,21 @@ func NewManifest(path string, data generic.Map) (m *manifest.Manifest) {
 }
 
 var _ = Describe("Manifests", func() {
+	It("errors when provided multiple buildpacks", func() {
+		m := NewManifest("/some/path/manifest.yml", generic.NewMap(map[interface{}]interface{}{
+			"applications": []interface{}{
+				map[interface{}]interface{}{
+					"name":       "bitcoin-miner",
+					"buildpacks": []interface{}{"a", "b"},
+				},
+			},
+		}))
+
+		_, err := m.Applications()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(MatchRegexp("The following manifest fields cannot be used with legacy push: buildpacks"))
+	})
+
 	It("merges global properties into each app's properties", func() {
 		m := NewManifest("/some/path/manifest.yml", generic.NewMap(map[interface{}]interface{}{
 			"instances": "3",
@@ -427,71 +442,6 @@ var _ = Describe("Manifests", func() {
 		apps2, err := m.Applications()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(apps1).To(Equal(apps2))
-	})
-
-	Context("parsing app ports", func() {
-		It("parses app ports", func() {
-			m := NewManifest("/some/path", generic.NewMap(map[interface{}]interface{}{
-				"applications": []interface{}{
-					map[interface{}]interface{}{
-						"app-ports": []interface{}{
-							8080,
-							9090,
-						},
-					},
-				},
-			}))
-
-			apps, err := m.Applications()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(apps[0].AppPorts).NotTo(BeNil())
-			Expect(*(apps[0].AppPorts)).To(Equal([]int{8080, 9090}))
-		})
-
-		It("handles omitted field", func() {
-			m := NewManifest("/some/path", generic.NewMap(map[interface{}]interface{}{
-				"applications": []interface{}{
-					map[interface{}]interface{}{},
-				},
-			}))
-
-			apps, err := m.Applications()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(apps[0].AppPorts).To(BeNil())
-		})
-
-		It("handles mixed arrays", func() {
-			m := NewManifest("/some/path", generic.NewMap(map[interface{}]interface{}{
-				"applications": []interface{}{
-					map[interface{}]interface{}{
-						"app-ports": []interface{}{
-							8080,
-							"potato",
-						},
-					},
-				},
-			}))
-
-			_, err := m.Applications()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Expected app-ports to be a list of integers."))
-		})
-
-		It("handles non-array values", func() {
-			m := NewManifest("/some/path", generic.NewMap(map[interface{}]interface{}{
-				"applications": []interface{}{
-					map[interface{}]interface{}{
-						"app-ports": "potato",
-					},
-				},
-			}))
-
-			_, err := m.Applications()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("Expected app-ports to be a list of integers."))
-		})
 	})
 
 	Context("parsing env vars", func() {

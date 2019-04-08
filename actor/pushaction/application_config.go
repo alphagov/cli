@@ -7,7 +7,6 @@ import (
 	"code.cloudfoundry.org/cli/actor/sharedaction"
 	"code.cloudfoundry.org/cli/actor/v2action"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2/constant"
-	"code.cloudfoundry.org/cli/types"
 	"code.cloudfoundry.org/cli/util/manifest"
 	log "github.com/sirupsen/logrus"
 )
@@ -29,8 +28,6 @@ type ApplicationConfig struct {
 	Archive            bool
 	Path               string
 	DropletPath        string
-
-	TargetedSpaceGUID string
 }
 
 func (config ApplicationConfig) CreatingApplication() bool {
@@ -41,42 +38,40 @@ func (config ApplicationConfig) UpdatingApplication() bool {
 	return !config.CreatingApplication()
 }
 
-func (config ApplicationConfig) HasV3Buildpacks() bool {
+func (config ApplicationConfig) HasMultipleBuildpacks() bool {
 	return len(config.DesiredApplication.Buildpacks) > 1
 }
 
+// ConvertToApplicationConfigs converts a set of application manifests into an
+// application configs. These configs reflect the current and desired states of
+// the application - providing details required by the Apply function to
+// proceed.
+//
+// The V2 Actor is primarily used to determine all but multiple buildpack
+// information. Only then is the V3 Actor used to gather the multiple
+// buildpacks.
 func (actor Actor) ConvertToApplicationConfigs(orgGUID string, spaceGUID string, noStart bool, apps []manifest.Application) ([]ApplicationConfig, Warnings, error) {
 	var configs []ApplicationConfig
 	var warnings Warnings
 
 	log.Infof("iterating through %d app configuration(s)", len(apps))
 	for _, app := range apps {
+		config := ApplicationConfig{
+			NoRoute: app.NoRoute,
+		}
 
-		var (
-			config  ApplicationConfig
-			absPath string
-			err     error
-		)
 		if app.DropletPath != "" {
-			absPath, err = filepath.EvalSymlinks(app.DropletPath)
+			absPath, err := filepath.EvalSymlinks(app.DropletPath)
 			if err != nil {
 				return nil, nil, err
 			}
-			config = ApplicationConfig{
-				TargetedSpaceGUID: spaceGUID,
-				DropletPath:       absPath,
-				NoRoute:           app.NoRoute,
-			}
+			config.DropletPath = absPath
 		} else {
-			absPath, err = filepath.EvalSymlinks(app.Path)
+			absPath, err := filepath.EvalSymlinks(app.Path)
 			if err != nil {
 				return nil, nil, err
 			}
-			config = ApplicationConfig{
-				TargetedSpaceGUID: spaceGUID,
-				Path:              absPath,
-				NoRoute:           app.NoRoute,
-			}
+			config.Path = absPath
 		}
 
 		log.Infoln("searching for app", app.Name)
@@ -245,27 +240,21 @@ func (actor Actor) configureResources(config ApplicationConfig) (ApplicationConf
 }
 
 func (Actor) overrideApplicationProperties(application Application, manifest manifest.Application, noStart bool) Application {
-
 	if manifest.Buildpack.IsSet {
-		application.Buildpack = manifest.Buildpack
+		application.Buildpacks = []string{}
+		if len(manifest.Buildpack.Value) > 0 {
+			application.Buildpacks = append(application.Buildpacks, manifest.Buildpack.Value)
+		}
 	}
 
-	for _, buildpack := range manifest.Buildpacks {
-		bp := types.FilteredString{
-			IsSet: true,
-			Value: buildpack.Value,
-		}
-
-		if application.Buildpacks == nil {
-			application.Buildpacks = []types.FilteredString{}
-		}
-
-		application.Buildpacks = append(application.Buildpacks, bp)
+	if manifest.Buildpacks != nil {
+		application.Buildpacks = append([]string{}, manifest.Buildpacks...)
 	}
 
 	if manifest.Command.IsSet {
 		application.Command = manifest.Command
 	}
+
 	if manifest.DockerImage != "" {
 		application.DockerImage = manifest.DockerImage
 		if manifest.DockerUsername != "" {

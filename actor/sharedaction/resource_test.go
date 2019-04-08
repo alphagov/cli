@@ -2,6 +2,8 @@ package sharedaction_test
 
 import (
 	"archive/zip"
+	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -63,12 +65,105 @@ var _ = Describe("Resource Actions", func() {
 		Expect(os.RemoveAll(srcDir)).ToNot(HaveOccurred())
 	})
 
+	Describe("SharedToV3Resource", func() {
+
+		var returnedV3Resource V3Resource
+		var sharedResource = Resource{Filename: "file1", SHA1: "a43rknl", Mode: os.FileMode(644), Size: 100000}
+
+		JustBeforeEach(func() {
+			returnedV3Resource = sharedResource.ToV3Resource()
+		})
+
+		It("returns a ccv3 Resource", func() {
+			Expect(returnedV3Resource).To(Equal(V3Resource{
+				FilePath: "file1",
+				Checksum: ccv3.Checksum{
+					Value: "a43rknl",
+				},
+				SizeInBytes: 100000,
+				Mode:        os.FileMode(644),
+			}))
+		})
+
+	})
+
+	Describe("ToSharedResource", func() {
+
+		var returnedSharedResource Resource
+		var v3Resource = V3Resource{
+			FilePath: "file1",
+			Checksum: ccv3.Checksum{
+				Value: "a43rknl",
+			},
+			SizeInBytes: 100000,
+			Mode:        os.FileMode(644),
+		}
+
+		JustBeforeEach(func() {
+			returnedSharedResource = v3Resource.ToV2Resource()
+		})
+
+		It("returns a ccv3 Resource", func() {
+			Expect(returnedSharedResource).To(Equal(Resource{Filename: "file1", SHA1: "a43rknl", Mode: os.FileMode(644), Size: 100000}))
+
+		})
+	})
+
 	Describe("GatherArchiveResources", func() {
 		// tests are under resource_unix_test.go and resource_windows_test.go
 	})
 
 	Describe("GatherDirectoryResources", func() {
 		// tests are under resource_unix_test.go and resource_windows_test.go
+	})
+
+	Describe("ReadArchive", func() {
+		var (
+			archivePath string
+			executeErr  error
+
+			readCloser io.ReadCloser
+			fileSize   int64
+		)
+
+		JustBeforeEach(func() {
+			readCloser, fileSize, executeErr = actor.ReadArchive(archivePath)
+		})
+
+		AfterEach(func() {
+			Expect(os.RemoveAll(archivePath)).ToNot(HaveOccurred())
+		})
+
+		When("the archive can be accessed properly", func() {
+			BeforeEach(func() {
+				tmpfile, err := ioutil.TempFile("", "fake-archive")
+				Expect(err).ToNot(HaveOccurred())
+				_, err = tmpfile.Write([]byte("123456"))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(tmpfile.Close()).ToNot(HaveOccurred())
+
+				archivePath = tmpfile.Name()
+			})
+
+			It("returns zero errors", func() {
+				defer readCloser.Close()
+
+				Expect(executeErr).ToNot(HaveOccurred())
+				Expect(fileSize).To(BeNumerically("==", 6))
+
+				b := make([]byte, 100)
+				size, err := readCloser.Read(b)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(b[:size]).To(Equal([]byte("123456")))
+			})
+		})
+
+		When("the archive returns any access errors", func() {
+			It("returns the error", func() {
+				_, ok := executeErr.(*os.PathError)
+				Expect(ok).To(BeTrue())
+			})
+		})
 	})
 
 	Describe("ZipArchiveResources", func() {
@@ -98,8 +193,8 @@ var _ = Describe("Resource Actions", func() {
 			Expect(os.RemoveAll(resultZip)).ToNot(HaveOccurred())
 		})
 
-		Context("when the files have not been changed since scanning them", func() {
-			Context("when there are no symlinks", func() {
+		When("the files have not been changed since scanning them", func() {
+			When("there are no symlinks", func() {
 				BeforeEach(func() {
 					resources = []Resource{
 						{Filename: "/"},
@@ -126,22 +221,24 @@ var _ = Describe("Resource Actions", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(reader.File).To(HaveLen(5))
+
 					Expect(reader.File[0].Name).To(Equal("/"))
+
 					Expect(reader.File[1].Name).To(Equal("/level1/"))
+
 					Expect(reader.File[2].Name).To(Equal("/level1/level2/"))
+
 					Expect(reader.File[3].Name).To(Equal("/level1/level2/tmpFile1"))
-					Expect(reader.File[4].Name).To(Equal("/tmpFile2"))
-
+					Expect(reader.File[3].Method).To(Equal(zip.Deflate))
 					expectFileContentsToEqual(reader.File[3], "why hello")
-					expectFileContentsToEqual(reader.File[4], "Hello, Binky")
 
-					for _, file := range reader.File {
-						Expect(file.Method).To(Equal(zip.Deflate))
-					}
+					Expect(reader.File[4].Name).To(Equal("/tmpFile2"))
+					Expect(reader.File[4].Method).To(Equal(zip.Deflate))
+					expectFileContentsToEqual(reader.File[4], "Hello, Binky")
 				})
 			})
 
-			Context("when there are relative symlink files", func() {
+			When("there are relative symlink files", func() {
 				BeforeEach(func() {
 					resources = []Resource{
 						{Filename: "/"},
@@ -185,7 +282,7 @@ var _ = Describe("Resource Actions", func() {
 			})
 		})
 
-		Context("when the files have changed since the scanning", func() {
+		When("the files have changed since the scanning", func() {
 			BeforeEach(func() {
 				resources = []Resource{
 					{Filename: "/"},
@@ -218,8 +315,8 @@ var _ = Describe("Resource Actions", func() {
 			Expect(os.RemoveAll(resultZip)).ToNot(HaveOccurred())
 		})
 
-		Context("when the files have not been changed since scanning them", func() {
-			Context("when there are no symlinks", func() {
+		When("the files have not been changed since scanning them", func() {
+			When("there are no symlinks", func() {
 				BeforeEach(func() {
 					resources = []Resource{
 						{Filename: "level1"},
@@ -246,22 +343,24 @@ var _ = Describe("Resource Actions", func() {
 
 					Expect(reader.File).To(HaveLen(5))
 					Expect(reader.File[0].Name).To(Equal("level1/"))
+
 					Expect(reader.File[1].Name).To(Equal("level1/level2/"))
+
 					Expect(reader.File[2].Name).To(Equal("level1/level2/tmpFile1"))
-					Expect(reader.File[3].Name).To(Equal("tmpFile2"))
-					Expect(reader.File[4].Name).To(Equal("tmpFile3"))
-
+					Expect(reader.File[2].Method).To(Equal(zip.Deflate))
 					expectFileContentsToEqual(reader.File[2], "why hello")
-					expectFileContentsToEqual(reader.File[3], "Hello, Binky")
-					expectFileContentsToEqual(reader.File[4], "Bananarama")
 
-					for _, file := range reader.File {
-						Expect(file.Method).To(Equal(zip.Deflate))
-					}
+					Expect(reader.File[3].Name).To(Equal("tmpFile2"))
+					Expect(reader.File[3].Method).To(Equal(zip.Deflate))
+					expectFileContentsToEqual(reader.File[3], "Hello, Binky")
+
+					Expect(reader.File[4].Name).To(Equal("tmpFile3"))
+					Expect(reader.File[4].Method).To(Equal(zip.Deflate))
+					expectFileContentsToEqual(reader.File[4], "Bananarama")
 				})
 			})
 
-			Context("when there are relative symlink files", func() {
+			When("there are relative symlink files", func() {
 				BeforeEach(func() {
 					resources = []Resource{
 						{Filename: "level1"},
@@ -287,23 +386,26 @@ var _ = Describe("Resource Actions", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					Expect(reader.File).To(HaveLen(5))
-					Expect(reader.File[0].Name).To(Equal("level1/"))
-					Expect(reader.File[1].Name).To(Equal("level1/level2/"))
-					Expect(reader.File[2].Name).To(Equal("level1/level2/tmpFile1"))
-					Expect(reader.File[3].Name).To(Equal("symlink1"))
-					Expect(reader.File[4].Name).To(Equal("level1/level2/symlink2"))
 
+					Expect(reader.File[0].Name).To(Equal("level1/"))
+
+					Expect(reader.File[1].Name).To(Equal("level1/level2/"))
+
+					Expect(reader.File[2].Name).To(Equal("level1/level2/tmpFile1"))
 					expectFileContentsToEqual(reader.File[2], "why hello")
+
+					Expect(reader.File[3].Name).To(Equal("symlink1"))
 					Expect(reader.File[3].Mode() & os.ModeSymlink).To(Equal(os.ModeSymlink))
 					expectFileContentsToEqual(reader.File[3], filepath.FromSlash("level1/level2/tmpFile1"))
 
+					Expect(reader.File[4].Name).To(Equal("level1/level2/symlink2"))
 					Expect(reader.File[4].Mode() & os.ModeSymlink).To(Equal(os.ModeSymlink))
 					expectFileContentsToEqual(reader.File[4], filepath.FromSlash("../../tmpfile2"))
 				})
 			})
 		})
 
-		Context("when the files have changed since the scanning", func() {
+		When("the files have changed since the scanning", func() {
 			BeforeEach(func() {
 				resources = []Resource{
 					{Filename: "level1"},

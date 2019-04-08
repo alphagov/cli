@@ -11,10 +11,10 @@ import (
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
 
 	"code.cloudfoundry.org/cli/cf/api/apifakes"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -32,7 +32,6 @@ var _ = Describe("CreateServiceBroker", func() {
 
 		loginRequirement         requirements.Requirement
 		targetedSpaceRequirement requirements.Requirement
-		minAPIVersionRequirement requirements.Requirement
 	)
 
 	BeforeEach(func() {
@@ -58,9 +57,6 @@ var _ = Describe("CreateServiceBroker", func() {
 
 		targetedSpaceRequirement = &passingRequirement{Name: "targeted-space-requirement"}
 		factory.NewTargetedSpaceRequirementReturns(targetedSpaceRequirement)
-
-		minAPIVersionRequirement = &passingRequirement{Name: "min-api-version-requirement"}
-		factory.NewMinAPIVersionRequirementReturns(minAPIVersionRequirement)
 	})
 
 	It("has an alias of `csb`", func() {
@@ -108,12 +104,6 @@ var _ = Describe("CreateServiceBroker", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(factory.NewTargetedSpaceRequirementCallCount()).To(Equal(1))
 				Expect(actualRequirements).To(ContainElement(targetedSpaceRequirement))
-			})
-
-			It("returns a MinAPIVersionRequirement", func() {
-				actualRequirements, err := cmd.Requirements(factory, flagContext)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(actualRequirements).To(ContainElement(minAPIVersionRequirement))
 			})
 		})
 	})

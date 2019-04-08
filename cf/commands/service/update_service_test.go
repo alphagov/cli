@@ -12,15 +12,13 @@ import (
 	"code.cloudfoundry.org/cli/cf/models"
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
-	testcmd "code.cloudfoundry.org/cli/util/testhelpers/commands"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testcmd "code.cloudfoundry.org/cli/cf/util/testhelpers/commands"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"code.cloudfoundry.org/cli/cf/commands/service"
-	"code.cloudfoundry.org/cli/cf/flags"
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 )
 
 var _ = Describe("update-service command", func() {
@@ -89,34 +87,6 @@ var _ = Describe("update-service command", func() {
 		It("fails when a space is not targeted", func() {
 			requirementsFactory.NewTargetedSpaceRequirementReturns(requirements.Failing{Message: "not targeting space"})
 			Expect(callUpdateService([]string{"cleardb", "spark", "my-cleardb-service"})).To(BeFalse())
-		})
-
-		Context("-p", func() {
-			It("when provided, requires a CC API version > cf.UpdateServicePlanMinimumAPIVersion", func() {
-				cmd := &service.UpdateService{}
-
-				fc := flags.NewFlagContext(cmd.MetaData().Flags)
-				fc.Parse("potato", "-p", "plan-name")
-
-				reqs, err := cmd.Requirements(requirementsFactory, fc)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(reqs).NotTo(BeEmpty())
-
-				Expect(reqs).To(ContainElement(requirements.Passing{Type: "minAPIVersionReq"}))
-			})
-
-			It("does not requirue a CC Api Version if not provided", func() {
-				cmd := &service.UpdateService{}
-
-				fc := flags.NewFlagContext(cmd.MetaData().Flags)
-				fc.Parse("potato")
-
-				reqs, err := cmd.Requirements(requirementsFactory, fc)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(reqs).NotTo(BeEmpty())
-
-				Expect(reqs).NotTo(ContainElement(requirements.Passing{Type: "minAPIVersionReq"}))
-			})
 		})
 	})
 

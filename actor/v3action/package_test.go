@@ -2,8 +2,10 @@ package v3action_test
 
 import (
 	"errors"
+	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"code.cloudfoundry.org/cli/actor/actionerror"
 	"code.cloudfoundry.org/cli/actor/sharedaction"
@@ -15,6 +17,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
 )
 
 var _ = Describe("Package Actions", func() {
@@ -33,7 +36,7 @@ var _ = Describe("Package Actions", func() {
 	})
 
 	Describe("GetApplicationPackages", func() {
-		Context("when there are no client errors", func() {
+		When("there are no client errors", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns(
 					[]ccv3.Application{
@@ -92,7 +95,7 @@ var _ = Describe("Package Actions", func() {
 			})
 		})
 
-		Context("when getting the application fails", func() {
+		When("getting the application fails", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -113,7 +116,7 @@ var _ = Describe("Package Actions", func() {
 			})
 		})
 
-		Context("when getting the application packages fails", func() {
+		When("getting the application packages fails", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -154,7 +157,7 @@ var _ = Describe("Package Actions", func() {
 			dockerPackage, warnings, executeErr = actor.CreateDockerPackageByApplicationNameAndSpace("some-app-name", "some-space-guid", DockerImageCredentials{Path: "some-docker-image", Password: "some-password", Username: "some-username"})
 		})
 
-		Context("when the application can't be retrieved", func() {
+		When("the application can't be retrieved", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns(
 					[]ccv3.Application{},
@@ -169,7 +172,7 @@ var _ = Describe("Package Actions", func() {
 			})
 		})
 
-		Context("when the application can be retrieved", func() {
+		When("the application can be retrieved", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns(
 					[]ccv3.Application{
@@ -183,7 +186,7 @@ var _ = Describe("Package Actions", func() {
 				)
 			})
 
-			Context("when creating the package fails", func() {
+			When("creating the package fails", func() {
 				BeforeEach(func() {
 					fakeCloudControllerClient.CreatePackageReturns(
 						ccv3.Package{},
@@ -197,7 +200,7 @@ var _ = Describe("Package Actions", func() {
 				})
 			})
 
-			Context("when creating the package succeeds", func() {
+			When("creating the package succeeds", func() {
 				BeforeEach(func() {
 					createdPackage := ccv3.Package{
 						DockerImage:    "some-docker-image",
@@ -284,7 +287,7 @@ var _ = Describe("Package Actions", func() {
 			pkg, warnings, executeErr = actor.CreateAndUploadBitsPackageByApplicationNameAndSpace("some-app-name", "some-space-guid", bitsPath)
 		})
 
-		Context("when retrieving the application errors", func() {
+		When("retrieving the application errors", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns(
 					[]ccv3.Application{},
@@ -299,7 +302,7 @@ var _ = Describe("Package Actions", func() {
 			})
 		})
 
-		Context("when the application can be retrieved", func() {
+		When("the application can be retrieved", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns(
 					[]ccv3.Application{
@@ -313,7 +316,7 @@ var _ = Describe("Package Actions", func() {
 				)
 			})
 
-			Context("when bits path is a directory", func() {
+			When("bits path is a directory", func() {
 				BeforeEach(func() {
 					var err error
 					bitsPath, err = ioutil.TempDir("", "example")
@@ -332,7 +335,7 @@ var _ = Describe("Package Actions", func() {
 					Expect(fakeSharedActor.ZipDirectoryResourcesCallCount()).To(Equal(1))
 				})
 
-				Context("when gathering resources fails", func() {
+				When("gathering resources fails", func() {
 					BeforeEach(func() {
 						fakeSharedActor.GatherDirectoryResourcesReturns(nil, errors.New("some-gather-error"))
 					})
@@ -343,12 +346,12 @@ var _ = Describe("Package Actions", func() {
 					})
 				})
 
-				Context("when gathering resources succeeds", func() {
+				When("gathering resources succeeds", func() {
 					BeforeEach(func() {
 						fakeSharedActor.GatherDirectoryResourcesReturns([]sharedaction.Resource{{Filename: "file-1"}, {Filename: "file-2"}}, nil)
 					})
 
-					Context("when zipping gathered resources fails", func() {
+					When("zipping gathered resources fails", func() {
 						BeforeEach(func() {
 							fakeSharedActor.ZipDirectoryResourcesReturns("", errors.New("some-archive-error"))
 						})
@@ -359,12 +362,12 @@ var _ = Describe("Package Actions", func() {
 						})
 					})
 
-					Context("when zipping gathered resources succeeds", func() {
+					When("zipping gathered resources succeeds", func() {
 						BeforeEach(func() {
 							fakeSharedActor.ZipDirectoryResourcesReturns("zipped-archive", nil)
 						})
 
-						Context("when creating the package fails", func() {
+						When("creating the package fails", func() {
 							BeforeEach(func() {
 								fakeCloudControllerClient.CreatePackageReturns(
 									ccv3.Package{},
@@ -379,7 +382,7 @@ var _ = Describe("Package Actions", func() {
 							})
 						})
 
-						Context("when creating the package succeeds", func() {
+						When("creating the package succeeds", func() {
 							var createdPackage ccv3.Package
 
 							BeforeEach(func() {
@@ -406,7 +409,7 @@ var _ = Describe("Package Actions", func() {
 								Expect(zippedArchive).To(Equal("zipped-archive"))
 							})
 
-							Context("when uploading fails", func() {
+							When("uploading fails", func() {
 								BeforeEach(func() {
 									fakeCloudControllerClient.UploadPackageReturns(
 										ccv3.Package{},
@@ -421,7 +424,7 @@ var _ = Describe("Package Actions", func() {
 								})
 							})
 
-							Context("when uploading succeeds", func() {
+							When("uploading succeeds", func() {
 								BeforeEach(func() {
 									fakeCloudControllerClient.UploadPackageReturns(
 										ccv3.Package{},
@@ -430,7 +433,7 @@ var _ = Describe("Package Actions", func() {
 									)
 								})
 
-								Context("when the polling errors", func() {
+								When("the polling errors", func() {
 									var expectedErr error
 
 									BeforeEach(func() {
@@ -448,7 +451,7 @@ var _ = Describe("Package Actions", func() {
 									})
 								})
 
-								Context("when the polling is successful", func() {
+								When("the polling is successful", func() {
 									It("collects all warnings", func() {
 										Expect(executeErr).NotTo(HaveOccurred())
 										Expect(warnings).To(ConsistOf("some-app-warning", "some-package-warning", "upload-package-warning"))
@@ -531,7 +534,7 @@ var _ = Describe("Package Actions", func() {
 				})
 			})
 
-			Context("when bitsPath is blank", func() {
+			When("bitsPath is blank", func() {
 				var oldCurrentDir, appDir string
 				BeforeEach(func() {
 					var err error
@@ -564,7 +567,7 @@ var _ = Describe("Package Actions", func() {
 				})
 			})
 
-			Context("when bits path is an archive", func() {
+			When("bits path is an archive", func() {
 				BeforeEach(func() {
 					var err error
 					tempFile, err := ioutil.TempFile("", "bits-zip-test")
@@ -591,7 +594,7 @@ var _ = Describe("Package Actions", func() {
 					Expect(fakeSharedActor.ZipArchiveResourcesCallCount()).To(Equal(1))
 				})
 
-				Context("when gathering archive resources fails", func() {
+				When("gathering archive resources fails", func() {
 					BeforeEach(func() {
 						fakeSharedActor.GatherArchiveResourcesReturns(nil, errors.New("some-archive-resource-error"))
 					})
@@ -602,12 +605,12 @@ var _ = Describe("Package Actions", func() {
 
 				})
 
-				Context("when gathering resources succeeds", func() {
+				When("gathering resources succeeds", func() {
 					BeforeEach(func() {
 						fakeSharedActor.GatherArchiveResourcesReturns([]sharedaction.Resource{{Filename: "file-1"}, {Filename: "file-2"}}, nil)
 					})
 
-					Context("when zipping gathered resources fails", func() {
+					When("zipping gathered resources fails", func() {
 						BeforeEach(func() {
 							fakeSharedActor.ZipArchiveResourcesReturns("", errors.New("some-archive-error"))
 						})
@@ -618,7 +621,7 @@ var _ = Describe("Package Actions", func() {
 						})
 					})
 
-					Context("when zipping gathered resources succeeds", func() {
+					When("zipping gathered resources succeeds", func() {
 						BeforeEach(func() {
 							fakeSharedActor.ZipArchiveResourcesReturns("zipped-archive", nil)
 						})
@@ -635,7 +638,7 @@ var _ = Describe("Package Actions", func() {
 				})
 			})
 
-			Context("when bits path is a symlink to a directory", func() {
+			When("bits path is a symlink to a directory", func() {
 				var tempDir string
 
 				BeforeEach(func() {
@@ -664,7 +667,7 @@ var _ = Describe("Package Actions", func() {
 				})
 			})
 
-			Context("when bits path is symlink to an archive", func() {
+			When("bits path is symlink to an archive", func() {
 				var archivePath string
 
 				BeforeEach(func() {
@@ -703,5 +706,231 @@ var _ = Describe("Package Actions", func() {
 				})
 			})
 		})
+	})
+
+	Describe("CreateBitsPackageByApplication", func() {
+		var (
+			appGUID string
+
+			pkg        Package
+			executeErr error
+			warnings   Warnings
+		)
+
+		JustBeforeEach(func() {
+			pkg, warnings, executeErr = actor.CreateBitsPackageByApplication(appGUID)
+		})
+
+		When("creating the package fails", func() {
+			BeforeEach(func() {
+				fakeCloudControllerClient.CreatePackageReturns(
+					ccv3.Package{},
+					ccv3.Warnings{"create-package-warning"},
+					errors.New("some-create-error"),
+				)
+			})
+
+			It("returns the error", func() {
+				Expect(executeErr).To(MatchError("some-create-error"))
+				Expect(warnings).To(ConsistOf("create-package-warning"))
+			})
+		})
+
+		When("creating the package succeeds", func() {
+			var createdPackage ccv3.Package
+
+			BeforeEach(func() {
+				createdPackage = ccv3.Package{GUID: "some-pkg-guid"}
+				fakeCloudControllerClient.CreatePackageReturns(
+					createdPackage,
+					ccv3.Warnings{"create-package-warning"},
+					nil,
+				)
+			})
+
+			It("returns all warnings and the package", func() {
+				Expect(executeErr).ToNot(HaveOccurred())
+
+				Expect(fakeCloudControllerClient.CreatePackageCallCount()).To(Equal(1))
+				Expect(fakeCloudControllerClient.CreatePackageArgsForCall(0)).To(Equal(ccv3.Package{
+					Type: constant.PackageTypeBits,
+					Relationships: ccv3.Relationships{
+						constant.RelationshipTypeApplication: ccv3.Relationship{GUID: appGUID},
+					},
+				}))
+
+				Expect(warnings).To(ConsistOf("create-package-warning"))
+				Expect(pkg).To(MatchFields(IgnoreExtras, Fields{
+					"GUID": Equal("some-pkg-guid"),
+				}))
+			})
+		})
+	})
+
+	Describe("UploadBitsPackage", func() {
+		var (
+			pkg              Package
+			matchedResources []sharedaction.Resource
+			reader           io.Reader
+			readerLength     int64
+
+			appPkg     Package
+			warnings   Warnings
+			executeErr error
+		)
+
+		BeforeEach(func() {
+			pkg = Package{GUID: "some-package-guid"}
+
+			matchedResources = []sharedaction.Resource{{Filename: "some-resource"}, {Filename: "another-resource"}}
+			someString := "who reads these days"
+			reader = strings.NewReader(someString)
+			readerLength = int64(len([]byte(someString)))
+		})
+
+		JustBeforeEach(func() {
+			appPkg, warnings, executeErr = actor.UploadBitsPackage(pkg, matchedResources, reader, readerLength)
+		})
+
+		When("the upload is successful", func() {
+			BeforeEach(func() {
+				fakeCloudControllerClient.UploadBitsPackageReturns(ccv3.Package{GUID: "some-package-guid"}, ccv3.Warnings{"upload-warning-1", "upload-warning-2"}, nil)
+			})
+
+			It("passes a ccv3 Resource to the client", func() {
+				passedPackage, passedMatchedResources, passedReader, passedReaderLength := fakeCloudControllerClient.UploadBitsPackageArgsForCall(0)
+				Expect(passedPackage).To(Equal(ccv3.Package(appPkg)))
+				Expect(passedMatchedResources).To(ConsistOf(ccv3.Resource{FilePath: "some-resource"}, ccv3.Resource{FilePath: "another-resource"}))
+				Expect(passedReader).To(Equal(reader))
+				Expect(passedReaderLength).To(Equal(readerLength))
+			})
+
+			It("returns all warnings", func() {
+				Expect(executeErr).ToNot(HaveOccurred())
+				Expect(warnings).To(ConsistOf("upload-warning-1", "upload-warning-2"))
+				Expect(appPkg).To(Equal(Package{GUID: "some-package-guid"}))
+
+				Expect(fakeCloudControllerClient.UploadBitsPackageCallCount()).To(Equal(1))
+
+			})
+		})
+
+		When("the upload returns an error", func() {
+			var err error
+
+			BeforeEach(func() {
+				err = errors.New("some-error")
+				fakeCloudControllerClient.UploadBitsPackageReturns(ccv3.Package{}, ccv3.Warnings{"upload-warning-1", "upload-warning-2"}, err)
+			})
+
+			It("returns the error", func() {
+				Expect(executeErr).To(MatchError(err))
+				Expect(warnings).To(ConsistOf("upload-warning-1", "upload-warning-2"))
+			})
+		})
+	})
+
+	Describe("PollPackage", func() {
+		Context("Polling Behavior", func() {
+			var (
+				pkg Package
+
+				appPkg     Package
+				warnings   Warnings
+				executeErr error
+			)
+
+			BeforeEach(func() {
+				pkg = Package{
+					GUID: "some-pkg-guid",
+				}
+
+				warnings = nil
+				executeErr = nil
+
+				// putting this here so the tests don't hang on polling
+				fakeCloudControllerClient.GetPackageReturns(
+					ccv3.Package{
+						GUID:  "some-pkg-guid",
+						State: constant.PackageReady,
+					},
+					ccv3.Warnings{},
+					nil,
+				)
+			})
+
+			JustBeforeEach(func() {
+				appPkg, warnings, executeErr = actor.PollPackage(pkg)
+			})
+
+			When("the polling errors", func() {
+				var expectedErr error
+
+				BeforeEach(func() {
+					expectedErr = errors.New("Fake error during polling")
+					fakeCloudControllerClient.GetPackageReturns(
+						ccv3.Package{},
+						ccv3.Warnings{"some-get-pkg-warning"},
+						expectedErr,
+					)
+				})
+
+				It("returns the error and warnings", func() {
+					Expect(executeErr).To(MatchError(expectedErr))
+					Expect(warnings).To(ConsistOf("some-get-pkg-warning"))
+				})
+			})
+
+			When("the polling is successful", func() {
+				It("returns the package", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+
+					expectedPackage := ccv3.Package{
+						GUID:  "some-pkg-guid",
+						State: constant.PackageReady,
+					}
+
+					Expect(appPkg).To(Equal(Package(expectedPackage)))
+					Expect(fakeCloudControllerClient.GetPackageCallCount()).To(Equal(1))
+					Expect(fakeCloudControllerClient.GetPackageArgsForCall(0)).To(Equal("some-pkg-guid"))
+				})
+			})
+		})
+
+		DescribeTable("Polling states",
+			func(finalState constant.PackageState, expectedErr error) {
+				fakeCloudControllerClient.GetPackageReturns(
+					ccv3.Package{GUID: "some-pkg-guid", State: constant.PackageAwaitingUpload},
+					ccv3.Warnings{"poll-package-warning"},
+					nil,
+				)
+
+				fakeCloudControllerClient.GetPackageReturnsOnCall(
+					1,
+					ccv3.Package{State: finalState},
+					ccv3.Warnings{"poll-package-warning"},
+					nil,
+				)
+
+				_, tableWarnings, err := actor.PollPackage(Package{
+					GUID: "some-pkg-guid",
+				})
+
+				if expectedErr == nil {
+					Expect(err).ToNot(HaveOccurred())
+				} else {
+					Expect(err).To(MatchError(expectedErr))
+				}
+
+				Expect(tableWarnings).To(ConsistOf("poll-package-warning", "poll-package-warning"))
+
+				Expect(fakeCloudControllerClient.GetPackageCallCount()).To(Equal(2))
+				Expect(fakeConfig.PollingIntervalCallCount()).To(Equal(2))
+			},
+
+			Entry("READY", constant.PackageReady, nil),
+			Entry("FAILED", constant.PackageFailed, actionerror.PackageProcessingFailedError{}),
+			Entry("EXPIRED", constant.PackageExpired, actionerror.PackageProcessingExpiredError{}),
+		)
 	})
 })

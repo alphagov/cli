@@ -1,20 +1,52 @@
 package ccv3_test
 
 import (
-	"net/http"
-
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	. "code.cloudfoundry.org/cli/api/cloudcontroller/ccv3"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/ghttp"
+	"net/http"
 )
 
 var _ = Describe("Job URL", func() {
 	var client *Client
+	var fakedMultiErrResponse string
+	var expectedMultiErr ccerror.MultiError
 
 	BeforeEach(func() {
-		client = NewTestClient()
+		client, _ = NewTestClient()
+
+		expectedMultiErr = ccerror.MultiError{
+			ResponseCode: http.StatusTeapot,
+			Errors: []ccerror.V3Error{
+				{
+					Code:   1001,
+					Detail: "Request invalid due to parse error: invalid request body",
+					Title:  "CF-MessageParseError",
+				},
+				{
+					Code:   10010,
+					Detail: "App not found",
+					Title:  "CF-ResourceNotFound",
+				},
+			},
+		}
+		fakedMultiErrResponse = `{
+		 "errors": [
+		   {
+		     "code": 1001,
+		     "detail": "Request invalid due to parse error: invalid request body",
+		     "title": "CF-MessageParseError"
+		   },
+		   {
+		     "code": 10010,
+		     "detail": "App not found",
+		     "title": "CF-ResourceNotFound"
+		   }
+		 ]
+		}`
+
 	})
 
 	Describe("DeleteApplication", func() {
@@ -28,7 +60,7 @@ var _ = Describe("Job URL", func() {
 			jobLocation, warnings, executeErr = client.DeleteApplication("some-app-guid")
 		})
 
-		Context("when the application is deleted successfully", func() {
+		When("the application is deleted successfully", func() {
 			BeforeEach(func() {
 				server.AppendHandlers(
 					CombineHandlers(
@@ -50,18 +82,46 @@ var _ = Describe("Job URL", func() {
 			})
 		})
 
-		Context("when deleting the application returns an error", func() {
+		When("deleting the application returns an error", func() {
 			BeforeEach(func() {
+				response := `{
+  "errors": [
+    {
+      "code": 1001,
+      "detail": "Request invalid due to parse error: invalid request body",
+      "title": "CF-MessageParseError"
+    },
+    {
+      "code": 10010,
+      "detail": "App not found",
+      "title": "CF-ResourceNotFound"
+    }
+  ]
+}`
 				server.AppendHandlers(
 					CombineHandlers(
 						VerifyRequest(http.MethodDelete, "/v3/apps/some-app-guid"),
-						RespondWith(http.StatusBadRequest, `{}`, http.Header{"X-Cf-Warnings": {"some-warning"}}),
+						RespondWith(http.StatusBadRequest, response, http.Header{"X-Cf-Warnings": {"some-warning"}}),
 					),
 				)
 			})
 
 			It("returns all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{ResponseCode: 400}))
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
+					ResponseCode: http.StatusBadRequest,
+					Errors: []ccerror.V3Error{
+						{
+							Code:   1001,
+							Detail: "Request invalid due to parse error: invalid request body",
+							Title:  "CF-MessageParseError",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
+						},
+					},
+				}))
 				Expect(warnings).To(ConsistOf("some-warning"))
 			})
 		})
@@ -83,7 +143,7 @@ var _ = Describe("Job URL", func() {
 			)
 		})
 
-		Context("when the manifest application is successful", func() {
+		When("the manifest application is successful", func() {
 			var expectedJobURL string
 
 			BeforeEach(func() {
@@ -111,50 +171,85 @@ var _ = Describe("Job URL", func() {
 			})
 		})
 
-		Context("when the manifest application fails", func() {
+		When("the manifest application fails", func() {
 			BeforeEach(func() {
-				response := `{
-  "errors": [
-    {
-      "code": 1001,
-      "detail": "Request invalid due to parse error: invalid request body",
-      "title": "CF-MessageParseError"
-    },
-    {
-      "code": 10010,
-      "detail": "App not found",
-      "title": "CF-ResourceNotFound"
-    }
-  ]
-}`
 				server.AppendHandlers(
 					CombineHandlers(
 						VerifyRequest(http.MethodPost, "/v3/apps/some-app-guid/actions/apply_manifest"),
 						VerifyHeaderKV("Content-type", "application/x-yaml"),
-						RespondWith(http.StatusTeapot, response, http.Header{"X-Cf-Warnings": {"this is a warning"}}),
+						RespondWith(http.StatusTeapot, fakedMultiErrResponse, http.Header{"X-Cf-Warnings": {"this is a warning"}}),
 					),
 				)
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
-					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   1001,
-								Detail: "Request invalid due to parse error: invalid request body",
-								Title:  "CF-MessageParseError",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
-						},
-					},
-				}))
+				Expect(executeErr).To(MatchError(expectedMultiErr))
 				Expect(warnings).To(ConsistOf("this is a warning"))
+			})
+		})
+	})
+
+	Describe("UpdateSpaceApplyManifest", func() {
+		var (
+			manifestBody []byte
+
+			responseJobURL JobURL
+			warnings       Warnings
+			executeErr     error
+
+			expectedJobURL string
+		)
+
+		JustBeforeEach(func() {
+			responseJobURL, warnings, executeErr = client.UpdateSpaceApplyManifest(
+				"some-space-guid",
+				manifestBody,
+			)
+		})
+
+		BeforeEach(func() {
+			manifestBody = []byte("fake-manifest-yml-body")
+			expectedJobURL = "apply-manifest-job-url"
+		})
+
+		When("applying the manifest to the space succeeds", func() {
+			BeforeEach(func() {
+				server.AppendHandlers(
+					CombineHandlers(
+						VerifyRequest(http.MethodPost, "/v3/spaces/some-space-guid/actions/apply_manifest"),
+						VerifyHeaderKV("Content-type", "application/x-yaml"),
+						VerifyBody(manifestBody),
+						RespondWith(http.StatusAccepted, "", http.Header{
+							"X-Cf-Warnings": {"some-ccv3-warning"},
+							"Location":      {expectedJobURL},
+						}),
+					),
+				)
+			})
+
+			It("returns the job URL and warnings", func() {
+				Expect(executeErr).To(Not(HaveOccurred()))
+				Expect(warnings).To(ConsistOf("some-ccv3-warning"))
+
+				Expect(responseJobURL).To(Equal(JobURL(expectedJobURL)))
+			})
+		})
+
+		When("applying the manifest to the space fails", func() {
+			BeforeEach(func() {
+				server.AppendHandlers(
+					CombineHandlers(
+						VerifyRequest(http.MethodPost, "/v3/spaces/some-space-guid/actions/apply_manifest"),
+						VerifyHeaderKV("Content-type", "application/x-yaml"),
+						RespondWith(
+							http.StatusTeapot, fakedMultiErrResponse, http.Header{"X-Cf-Warnings": {"some warning"}}),
+					),
+				)
+			})
+
+			It("returns an error and warnings", func() {
+				Expect(executeErr).To(HaveOccurred())
+				Expect(executeErr).To(MatchError(expectedMultiErr))
 			})
 		})
 	})

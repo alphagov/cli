@@ -63,6 +63,27 @@ func (client *Client) DopplerEndpoint() string {
 	return client.dopplerEndpoint
 }
 
+// Info returns back endpoint and API information from /v2/info.
+func (client *Client) Info() (APIInformation, Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.GetInfoRequest,
+	})
+	if err != nil {
+		return APIInformation{}, nil, err
+	}
+
+	var info APIInformation
+	response := cloudcontroller.Response{
+		DecodeJSONResponseInto: &info,
+	}
+
+	err = client.connection.Make(request, &response)
+	if unknownSourceErr, ok := err.(ccerror.UnknownHTTPSourceError); ok && unknownSourceErr.StatusCode == http.StatusNotFound {
+		return APIInformation{}, nil, ccerror.APINotFoundError{URL: client.cloudControllerURL}
+	}
+	return info, response.Warnings, err
+}
+
 // MinCLIVersion returns the minimum CLI version required for the targeted
 // Cloud Controller
 func (client *Client) MinCLIVersion() string {
@@ -78,25 +99,4 @@ func (client *Client) RoutingEndpoint() string {
 // TokenEndpoint returns the Token endpoint for the targeted Cloud Controller.
 func (client *Client) TokenEndpoint() string {
 	return client.tokenEndpoint
-}
-
-// Info returns back endpoint and API information from /v2/info.
-func (client *Client) Info() (APIInformation, Warnings, error) {
-	request, err := client.newHTTPRequest(requestOptions{
-		RequestName: internal.GetInfoRequest,
-	})
-	if err != nil {
-		return APIInformation{}, nil, err
-	}
-
-	var info APIInformation
-	response := cloudcontroller.Response{
-		Result: &info,
-	}
-
-	err = client.connection.Make(request, &response)
-	if unknownSourceErr, ok := err.(ccerror.UnknownHTTPSourceError); ok && unknownSourceErr.StatusCode == http.StatusNotFound {
-		return APIInformation{}, nil, ccerror.APINotFoundError{URL: client.cloudControllerURL}
-	}
-	return info, response.Warnings, err
 }

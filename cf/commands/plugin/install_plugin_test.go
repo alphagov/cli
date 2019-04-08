@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"code.cloudfoundry.org/cli/cf/actors/pluginrepo/pluginrepofakes"
 	"code.cloudfoundry.org/cli/cf/commandregistry"
@@ -19,18 +20,20 @@ import (
 	"code.cloudfoundry.org/cli/cf/models"
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
+	testcmd "code.cloudfoundry.org/cli/cf/util/testhelpers/commands"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
+	"code.cloudfoundry.org/cli/cf/util/utilfakes"
 	"code.cloudfoundry.org/cli/plugin"
-	testcmd "code.cloudfoundry.org/cli/util/testhelpers/commands"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
-	"code.cloudfoundry.org/cli/util/utilfakes"
 
 	clipr "github.com/cloudfoundry/cli-plugin-repo/web"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
+
+var runCmdMutex = sync.Mutex{}
 
 var _ = Describe("Install", func() {
 	var (
@@ -108,6 +111,11 @@ var _ = Describe("Install", func() {
 	})
 
 	runCommand := func(args ...string) bool {
+		// run command has races becuase it writes and erases temporary files, so the test runner should
+		// really only run one of these at a time. Often the files are actual compiled exes in the test
+		// fixtures path, so it's not easy to prevent the tests from sharing file handles
+		runCmdMutex.Lock()
+		defer runCmdMutex.Unlock()
 		return testcmd.RunCLICommand("install-plugin", args, requirementsFactory, updateCommandDependency, false, ui)
 	}
 

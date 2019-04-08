@@ -27,7 +27,7 @@ var _ = Describe("SetupResources", func() {
 		setupResourcesErr = client.SetupResources(server.URL())
 	})
 
-	Context("when the authentication server returns an error", func() {
+	When("the authentication server returns an error", func() {
 		BeforeEach(func() {
 			server.AppendHandlers(
 				CombineHandlers(
@@ -43,14 +43,21 @@ var _ = Describe("SetupResources", func() {
 		})
 	})
 
-	Context("when the request succeeds", func() {
+	When("the request succeeds", func() {
 		Context("and the UAA field is populated", func() {
 			BeforeEach(func() {
 				response := `{
-				"links": {
-					"uaa": "https://uaa.bosh-lite.com"
-				}
-			}`
+					"app": {
+						"version": "sem.var"
+					},
+					"links": {
+						"uaa": "https://uaa.bosh-lite.com"
+					},
+					"prompts": {
+						"username": [ "text", "Email" ],
+						"password": [ "password", "Password" ]
+					}
+				}`
 
 				server.AppendHandlers(
 					CombineHandlers(
@@ -62,12 +69,24 @@ var _ = Describe("SetupResources", func() {
 
 			It("sets the UAA endpoint to the UAA link and does not return an error", func() {
 				Expect(setupResourcesErr).ToNot(HaveOccurred())
+				Expect(client.UAALink()).To(Equal("https://uaa.bosh-lite.com"))
+				Expect(client.APIVersion()).To(Equal("sem.var"))
+
 				Expect(fakeConfig.SetUAAEndpointCallCount()).To(Equal(1))
 				Expect(fakeConfig.SetUAAEndpointArgsForCall(0)).To(Equal("https://uaa.bosh-lite.com"))
 			})
+
+			It("populates the client's info", func() {
+				Expect(client.Info.App.Version).To(Equal("sem.var"))
+				Expect(client.Info.Links.UAA).To(Equal("https://uaa.bosh-lite.com"))
+				Expect(client.Info.Prompts).To(Equal(map[string][]string{
+					"username": []string{"text", "Email"},
+					"password": []string{"password", "Password"},
+				}))
+			})
 		})
 
-		Context("when the UAA field is not populated", func() {
+		When("the UAA field is not populated", func() {
 			BeforeEach(func() {
 				response := `{
 				"links": {}

@@ -17,13 +17,13 @@ import (
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
 	"code.cloudfoundry.org/cli/plugin/models"
 
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
 	"code.cloudfoundry.org/cli/cf/api/apifakes"
 	"code.cloudfoundry.org/cli/cf/api/appinstances/appinstancesfakes"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -216,8 +216,6 @@ var _ = Describe("App", func() {
 				[]string{"Showing health and status for app fake-app-name"},
 				[]string{"requested state: started"},
 				[]string{"instances: 1/1"},
-				// Commented to hide app-ports for release #117189491
-				// []string{"app ports: 8080, 9090"},
 				[]string{"usage: 1G x 1 instances"},
 				[]string{"urls: fake-route-host.fake-route-domain-name"},
 				[]string{"last uploaded: Thu Nov 19 01:00:15 UTC 2015"},
@@ -343,21 +341,6 @@ var _ = Describe("App", func() {
 			})
 		})
 
-		Context("when the application has no app ports", func() {
-			BeforeEach(func() {
-				getAppSummaryModel.AppPorts = []int{}
-				appSummaryRepo.GetSummaryReturns(getAppSummaryModel, nil)
-			})
-
-			It("does not print 'app ports'", func() {
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(ui.Outputs()).NotTo(ContainSubstrings(
-					[]string{"app ports:"},
-				))
-			})
-		})
-
 		Context("when the GetApplication model includes a buildpack", func() {
 			// this should be the GetAppSummary model
 			BeforeEach(func() {
@@ -456,7 +439,6 @@ var _ = Describe("App", func() {
 					Expect(getAppModel.State).To(Equal("started"))
 					Expect(getAppModel.Guid).To(Equal("fake-app-guid"))
 					Expect(getAppModel.Command).To(Equal("fake-command"))
-					Expect(getAppModel.Diego).To(BeTrue())
 					Expect(getAppModel.DetectedStartCommand).To(Equal("fake-detected-start-command"))
 					Expect(getAppModel.DiskQuota).To(Equal(int64(1024)))
 					Expect(getAppModel.EnvironmentVars).To(Equal(map[string]interface{}{"fake-env-var": "fake-env-var-value"}))
@@ -469,7 +451,6 @@ var _ = Describe("App", func() {
 					Expect(getAppModel.PackageState).To(Equal("STAGED"))
 					Expect(getAppModel.StagingFailedReason).To(BeEmpty())
 					Expect(getAppModel.BuildpackUrl).To(Equal("fake-buildpack"))
-					Expect(getAppModel.AppPorts).To(Equal([]int{8080, 9090}))
 					Expect(getAppModel.Routes[0].Host).To(Equal("fake-route-host"))
 					Expect(getAppModel.Routes[0].Guid).To(Equal("fake-route-guid"))
 					Expect(getAppModel.Routes[0].Domain.Name).To(Equal("fake-route-domain-name"))

@@ -7,6 +7,7 @@ import (
 	. "code.cloudfoundry.org/cli/actor/v2action"
 	"code.cloudfoundry.org/cli/actor/v2action/v2actionfakes"
 	"code.cloudfoundry.org/cli/api/uaa/constant"
+	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -31,10 +32,14 @@ var _ = Describe("Auth Actions", func() {
 		)
 
 		JustBeforeEach(func() {
-			actualErr = actor.Authenticate("some-username", "some-password", grantType)
+			actualErr = actor.Authenticate("some-username", "some-password", "uaa", grantType)
 		})
 
-		Context("when no API errors occur", func() {
+		It("unsets org and space targeting", func() {
+			Expect(fakeConfig.UnsetOrganizationAndSpaceInformationCallCount()).To(Equal(1))
+		})
+
+		When("no API errors occur", func() {
 			BeforeEach(func() {
 				fakeUAAClient.AuthenticateReturns(
 					"some-access-token",
@@ -43,7 +48,15 @@ var _ = Describe("Auth Actions", func() {
 				)
 			})
 
-			Context("when the grant type is a password grant", func() {
+			It("sets the auth and refresh tokens in the config", func() {
+				Expect(fakeConfig.SetTokenInformationCallCount()).To(Equal(1))
+				accessToken, refreshToken, sshOAuthClient := fakeConfig.SetTokenInformationArgsForCall(0)
+				Expect(accessToken).To(Equal("bearer some-access-token"))
+				Expect(refreshToken).To(Equal("some-refresh-token"))
+				Expect(sshOAuthClient).To(BeEmpty())
+			})
+
+			When("the grant type is a password grant", func() {
 				BeforeEach(func() {
 					grantType = constant.GrantTypePassword
 				})
@@ -52,25 +65,23 @@ var _ = Describe("Auth Actions", func() {
 					Expect(actualErr).NotTo(HaveOccurred())
 
 					Expect(fakeUAAClient.AuthenticateCallCount()).To(Equal(1))
-					ID, secret, passedGrantType := fakeUAAClient.AuthenticateArgsForCall(0)
-					Expect(ID).To(Equal("some-username"))
-					Expect(secret).To(Equal("some-password"))
+					creds, origin, passedGrantType := fakeUAAClient.AuthenticateArgsForCall(0)
+					Expect(creds).To(Equal(map[string]string{
+						"username": "some-username",
+						"password": "some-password",
+					}))
+					Expect(origin).To(Equal("uaa"))
 					Expect(passedGrantType).To(Equal(constant.GrantTypePassword))
 
-					Expect(fakeConfig.SetTokenInformationCallCount()).To(Equal(1))
-					accessToken, refreshToken, sshOAuthClient := fakeConfig.SetTokenInformationArgsForCall(0)
-					Expect(accessToken).To(Equal("bearer some-access-token"))
-					Expect(refreshToken).To(Equal("some-refresh-token"))
-					Expect(sshOAuthClient).To(BeEmpty())
-
-					Expect(fakeConfig.UnsetOrganizationAndSpaceInformationCallCount()).To(Equal(1))
-					Expect(fakeConfig.SetUAAGrantTypeCallCount()).To(Equal(0))
+					Expect(fakeConfig.SetUAAGrantTypeCallCount()).To(Equal(1))
+					Expect(fakeConfig.SetUAAGrantTypeArgsForCall(0)).To(BeEquivalentTo(constant.GrantTypePassword))
 				})
 
-				Context("when a previous user authenticated with a client grant type", func() {
+				When("a previous user authenticated with a client grant type", func() {
 					BeforeEach(func() {
 						fakeConfig.UAAGrantTypeReturns("client_credentials")
 					})
+
 					It("returns a PasswordGrantTypeLogoutRequiredError", func() {
 						Expect(actualErr).To(MatchError(actionerror.PasswordGrantTypeLogoutRequiredError{}))
 						Expect(fakeConfig.UAAGrantTypeCallCount()).To(Equal(1))
@@ -78,7 +89,7 @@ var _ = Describe("Auth Actions", func() {
 				})
 			})
 
-			Context("when the grant type is not password", func() {
+			When("the grant type is client credentials", func() {
 				BeforeEach(func() {
 					grantType = constant.GrantTypeClientCredentials
 				})
@@ -91,10 +102,26 @@ var _ = Describe("Auth Actions", func() {
 					Expect(fakeConfig.SetUAAGrantTypeCallCount()).To(Equal(1))
 					Expect(fakeConfig.SetUAAGrantTypeArgsForCall(0)).To(Equal(string(constant.GrantTypeClientCredentials)))
 				})
+
+				It("authenticates the user and returns access and refresh tokens", func() {
+					Expect(actualErr).NotTo(HaveOccurred())
+
+					Expect(fakeUAAClient.AuthenticateCallCount()).To(Equal(1))
+					creds, origin, passedGrantType := fakeUAAClient.AuthenticateArgsForCall(0)
+					Expect(creds).To(Equal(map[string]string{
+						"client_id":     "some-username",
+						"client_secret": "some-password",
+					}))
+					Expect(origin).To(Equal("uaa"))
+					Expect(passedGrantType).To(Equal(constant.GrantTypeClientCredentials))
+
+					Expect(fakeConfig.SetUAAGrantTypeCallCount()).To(Equal(1))
+					Expect(fakeConfig.SetUAAGrantTypeArgsForCall(0)).To(BeEquivalentTo(constant.GrantTypeClientCredentials))
+				})
 			})
 		})
 
-		Context("when an API error occurs", func() {
+		When("an API error occurs", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -116,6 +143,35 @@ var _ = Describe("Auth Actions", func() {
 				Expect(sshOAuthClient).To(BeEmpty())
 
 				Expect(fakeConfig.UnsetOrganizationAndSpaceInformationCallCount()).To(Equal(1))
+			})
+		})
+	})
+
+	Describe("GetLoginPrompts", func() {
+		When("getting login prompts info from UAA", func() {
+			var (
+				prompts map[string]coreconfig.AuthPrompt
+			)
+
+			BeforeEach(func() {
+				fakeUAAClient.LoginPromptsReturns(map[string][]string{
+					"username": {"text", "Email"},
+					"pin":      {"password", "PIN Number"},
+				})
+				prompts = actor.GetLoginPrompts()
+			})
+
+			It("gets the login prompts", func() {
+				Expect(prompts).To(Equal(map[string]coreconfig.AuthPrompt{
+					"username": {
+						DisplayName: "Email",
+						Type:        coreconfig.AuthPromptTypeText,
+					},
+					"pin": {
+						DisplayName: "PIN Number",
+						Type:        coreconfig.AuthPromptTypePassword,
+					},
+				}))
 			})
 		})
 	})

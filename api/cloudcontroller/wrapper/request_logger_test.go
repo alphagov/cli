@@ -95,7 +95,7 @@ var _ = Describe("Request Logger", func() {
 			Expect(fakeOutput.DisplayMessageCallCount()).To(Equal(0))
 		})
 
-		Context("when an authorization header is in the request", func() {
+		When("an authorization header is in the request", func() {
 			BeforeEach(func() {
 				request.Header = http.Header{"Authorization": []string{"should not be shown"}}
 			})
@@ -109,8 +109,8 @@ var _ = Describe("Request Logger", func() {
 			})
 		})
 
-		Context("when passed a body", func() {
-			Context("when the request's Content-Type is application/json", func() {
+		When("passed a body", func() {
+			When("the request's Content-Type is application/json", func() {
 				BeforeEach(func() {
 					request.Header.Set("Content-Type", "application/json")
 				})
@@ -127,7 +127,7 @@ var _ = Describe("Request Logger", func() {
 				})
 			})
 
-			Context("when the request's Content-Type is application/x-www-form-urlencoded", func() {
+			When("the request's Content-Type is application/x-www-form-urlencoded", func() {
 				BeforeEach(func() {
 					request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				})
@@ -143,7 +143,7 @@ var _ = Describe("Request Logger", func() {
 				})
 			})
 
-			Context("when request's Content-Type is anything else", func() {
+			When("request's Content-Type is anything else", func() {
 				BeforeEach(func() {
 					request.Header.Set("Content-Type", "banana;rama")
 				})
@@ -157,7 +157,7 @@ var _ = Describe("Request Logger", func() {
 			})
 		})
 
-		Context("when an error occures while trying to log the request", func() {
+		When("an error occures while trying to log the request", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -181,52 +181,95 @@ var _ = Describe("Request Logger", func() {
 			})
 		})
 
-		Context("when the request is successful", func() {
-			BeforeEach(func() {
-				response = &cloudcontroller.Response{
-					RawResponse: []byte("some-response-body"),
-					HTTPResponse: &http.Response{
-						Proto:  "HTTP/1.1",
-						Status: "200 OK",
-						Header: http.Header{
-							"BBBBB": {"second"},
-							"AAAAA": {"first"},
-							"CCCCC": {"third"},
+		When("the request is successful", func() {
+			When("the response body is not YAML", func() {
+				BeforeEach(func() {
+					response = &cloudcontroller.Response{
+						RawResponse: []byte("some-response-body"),
+						HTTPResponse: &http.Response{
+							Proto:  "HTTP/1.1",
+							Status: "200 OK",
+							Header: http.Header{
+								"BBBBB": {"second"},
+								"AAAAA": {"first"},
+								"CCCCC": {"third"},
+							},
 						},
-					},
-				}
+					}
+				})
+
+				It("outputs the response", func() {
+					Expect(makeErr).NotTo(HaveOccurred())
+
+					Expect(fakeOutput.DisplayTypeCallCount()).To(Equal(2))
+					name, date := fakeOutput.DisplayTypeArgsForCall(1)
+					Expect(name).To(Equal("RESPONSE"))
+					Expect(date).To(BeTemporally("~", time.Now(), time.Second))
+
+					Expect(fakeOutput.DisplayResponseHeaderCallCount()).To(Equal(1))
+					protocol, status := fakeOutput.DisplayResponseHeaderArgsForCall(0)
+					Expect(protocol).To(Equal("HTTP/1.1"))
+					Expect(status).To(Equal("200 OK"))
+
+					Expect(fakeOutput.DisplayHeaderCallCount()).To(BeNumerically(">=", 6))
+					name, value := fakeOutput.DisplayHeaderArgsForCall(3)
+					Expect(name).To(Equal("AAAAA"))
+					Expect(value).To(Equal("first"))
+					name, value = fakeOutput.DisplayHeaderArgsForCall(4)
+					Expect(name).To(Equal("BBBBB"))
+					Expect(value).To(Equal("second"))
+					name, value = fakeOutput.DisplayHeaderArgsForCall(5)
+					Expect(name).To(Equal("CCCCC"))
+					Expect(value).To(Equal("third"))
+
+					Expect(fakeOutput.DisplayMessageCallCount()).To(BeNumerically("==", 0))
+
+					Expect(fakeOutput.DisplayJSONBodyCallCount()).To(BeNumerically(">=", 1))
+					Expect(fakeOutput.DisplayJSONBodyArgsForCall(0)).To(Equal([]byte("some-response-body")))
+				})
 			})
 
-			It("outputs the response", func() {
-				Expect(makeErr).NotTo(HaveOccurred())
+			When("the response body is YAML", func() {
+				BeforeEach(func() {
+					response = &cloudcontroller.Response{
+						RawResponse: []byte(`---\n- some-response-body`),
+						HTTPResponse: &http.Response{
+							Proto:  "HTTP/1.1",
+							Status: "200 OK",
+							Header: http.Header{
+								"Content-Type": {"application/x-yaml; charset=utf-16"},
+							},
+						},
+					}
+				})
 
-				Expect(fakeOutput.DisplayTypeCallCount()).To(Equal(2))
-				name, date := fakeOutput.DisplayTypeArgsForCall(1)
-				Expect(name).To(Equal("RESPONSE"))
-				Expect(date).To(BeTemporally("~", time.Now(), time.Second))
+				It("redacts the body to prevent leaking manifest credentials", func() {
+					Expect(makeErr).NotTo(HaveOccurred())
 
-				Expect(fakeOutput.DisplayResponseHeaderCallCount()).To(Equal(1))
-				protocol, status := fakeOutput.DisplayResponseHeaderArgsForCall(0)
-				Expect(protocol).To(Equal("HTTP/1.1"))
-				Expect(status).To(Equal("200 OK"))
+					Expect(fakeOutput.DisplayTypeCallCount()).To(Equal(2))
+					name, date := fakeOutput.DisplayTypeArgsForCall(1)
+					Expect(name).To(Equal("RESPONSE"))
+					Expect(date).To(BeTemporally("~", time.Now(), time.Second))
 
-				Expect(fakeOutput.DisplayHeaderCallCount()).To(BeNumerically(">=", 6))
-				name, value := fakeOutput.DisplayHeaderArgsForCall(3)
-				Expect(name).To(Equal("AAAAA"))
-				Expect(value).To(Equal("first"))
-				name, value = fakeOutput.DisplayHeaderArgsForCall(4)
-				Expect(name).To(Equal("BBBBB"))
-				Expect(value).To(Equal("second"))
-				name, value = fakeOutput.DisplayHeaderArgsForCall(5)
-				Expect(name).To(Equal("CCCCC"))
-				Expect(value).To(Equal("third"))
+					Expect(fakeOutput.DisplayResponseHeaderCallCount()).To(Equal(1))
+					protocol, status := fakeOutput.DisplayResponseHeaderArgsForCall(0)
+					Expect(protocol).To(Equal("HTTP/1.1"))
+					Expect(status).To(Equal("200 OK"))
 
-				Expect(fakeOutput.DisplayJSONBodyCallCount()).To(BeNumerically(">=", 1))
-				Expect(fakeOutput.DisplayJSONBodyArgsForCall(0)).To(Equal([]byte("some-response-body")))
+					Expect(fakeOutput.DisplayHeaderCallCount()).To(BeNumerically(">=", 4))
+					name, value := fakeOutput.DisplayHeaderArgsForCall(3)
+					Expect(name).To(Equal("Content-Type"))
+					Expect(value).To(Equal("application/x-yaml; charset=utf-16"))
+
+					Expect(fakeOutput.DisplayMessageCallCount()).To(BeNumerically(">=", 1))
+					Expect(fakeOutput.DisplayMessageArgsForCall(0)).To(Equal("[application/x-yaml Content Hidden]"))
+
+					Expect(fakeOutput.DisplayJSONBodyCallCount()).To(BeNumerically("==", 0))
+				})
 			})
 		})
 
-		Context("when the request is unsuccessful", func() {
+		When("the request is unsuccessful", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -234,7 +277,7 @@ var _ = Describe("Request Logger", func() {
 				fakeConnection.MakeReturns(expectedErr)
 			})
 
-			Context("when the http response is not set", func() {
+			When("the http response is not set", func() {
 				BeforeEach(func() {
 					response = &cloudcontroller.Response{}
 				})
@@ -245,7 +288,7 @@ var _ = Describe("Request Logger", func() {
 				})
 			})
 
-			Context("when the http response is set", func() {
+			When("the http response is set", func() {
 				BeforeEach(func() {
 					response = &cloudcontroller.Response{
 						RawResponse: []byte("some-error-body"),
@@ -291,7 +334,7 @@ var _ = Describe("Request Logger", func() {
 			})
 		})
 
-		Context("when an error occures while trying to log the response", func() {
+		When("an error occures while trying to log the response", func() {
 			var (
 				originalErr error
 				expectedErr error
@@ -326,7 +369,7 @@ var _ = Describe("Request Logger", func() {
 			Expect(fakeOutput.StopCallCount()).To(Equal(2))
 		})
 
-		Context("when displaying the logs have an error", func() {
+		When("displaying the logs have an error", func() {
 			var expectedErr error
 			BeforeEach(func() {
 				expectedErr = errors.New("Display error on request")

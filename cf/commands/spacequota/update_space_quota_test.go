@@ -3,7 +3,6 @@ package spacequota_test
 import (
 	"encoding/json"
 
-	"code.cloudfoundry.org/cli/cf"
 	"code.cloudfoundry.org/cli/cf/api/spacequotas/spacequotasfakes"
 	"code.cloudfoundry.org/cli/cf/commandregistry"
 	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
@@ -11,10 +10,10 @@ import (
 	"code.cloudfoundry.org/cli/cf/models"
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
-	testcmd "code.cloudfoundry.org/cli/util/testhelpers/commands"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testcmd "code.cloudfoundry.org/cli/cf/util/testhelpers/commands"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -75,25 +74,6 @@ var _ = Describe("update-space-quota command", func() {
 			))
 		})
 
-		Context("the minimum API version requirement", func() {
-			BeforeEach(func() {
-				requirementsFactory.NewLoginRequirementReturns(requirements.Passing{})
-				requirementsFactory.NewTargetedOrgRequirementReturns(new(requirementsfakes.FakeTargetedOrgRequirement))
-				requirementsFactory.NewMinAPIVersionRequirementReturns(requirements.Failing{Message: "not min api"})
-			})
-
-			It("fails when the -a option is provided", func() {
-				Expect(runCommand("my-quota", "-a", "10")).To(BeFalse())
-				Expect(requirementsFactory.NewMinAPIVersionRequirementCallCount()).To(Equal(1))
-				option, version := requirementsFactory.NewMinAPIVersionRequirementArgsForCall(0)
-				Expect(option).To(Equal("Option '-a'"))
-				Expect(version).To(Equal(cf.SpaceAppInstanceLimitMinimumAPIVersion))
-			})
-
-			It("does not fail when the -a option is not provided", func() {
-				Expect(runCommand("my-quota", "-m", "10G")).To(BeTrue())
-			})
-		})
 	})
 
 	Context("when the user is logged in", func() {

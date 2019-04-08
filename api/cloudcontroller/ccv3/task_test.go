@@ -16,11 +16,23 @@ var _ = Describe("Task", func() {
 	var client *Client
 
 	BeforeEach(func() {
-		client = NewTestClient()
+		client, _ = NewTestClient()
 	})
 
 	Describe("CreateApplicationTask", func() {
-		Context("when the application exists", func() {
+		var (
+			submitTask Task
+
+			task       Task
+			warnings   Warnings
+			executeErr error
+		)
+
+		JustBeforeEach(func() {
+			task, warnings, executeErr = client.CreateApplicationTask("some-app-guid", submitTask)
+		})
+
+		When("the application exists", func() {
 			var response string
 
 			BeforeEach(func() {
@@ -29,7 +41,7 @@ var _ = Describe("Task", func() {
 				}`
 			})
 
-			Context("when the name is empty", func() {
+			When("the name is empty", func() {
 				BeforeEach(func() {
 					server.AppendHandlers(
 						CombineHandlers(
@@ -38,18 +50,19 @@ var _ = Describe("Task", func() {
 							RespondWith(http.StatusAccepted, response, http.Header{"X-Cf-Warnings": {"warning"}}),
 						),
 					)
+
+					submitTask = Task{Command: "some command"}
 				})
 
 				It("creates and returns the task and all warnings", func() {
-					task, warnings, err := client.CreateApplicationTask("some-app-guid", Task{Command: "some command"})
-					Expect(err).ToNot(HaveOccurred())
+					Expect(executeErr).ToNot(HaveOccurred())
 
 					Expect(task).To(Equal(Task{SequenceID: 3}))
 					Expect(warnings).To(ConsistOf("warning"))
 				})
 			})
 
-			Context("when the name is not empty", func() {
+			When("the name is not empty", func() {
 				BeforeEach(func() {
 					server.AppendHandlers(
 						CombineHandlers(
@@ -58,18 +71,19 @@ var _ = Describe("Task", func() {
 							RespondWith(http.StatusAccepted, response, http.Header{"X-Cf-Warnings": {"warning"}}),
 						),
 					)
+
+					submitTask = Task{Command: "some command", Name: "some-task-name"}
 				})
 
 				It("creates and returns the task and all warnings", func() {
-					task, warnings, err := client.CreateApplicationTask("some-app-guid", Task{Command: "some command", Name: "some-task-name"})
-					Expect(err).ToNot(HaveOccurred())
+					Expect(executeErr).ToNot(HaveOccurred())
 
 					Expect(task).To(Equal(Task{SequenceID: 3}))
 					Expect(warnings).To(ConsistOf("warning"))
 				})
 			})
 
-			Context("when the disk size is not 0", func() {
+			When("the disk size is not 0", func() {
 				BeforeEach(func() {
 					response := `{
 						"disk_in_mb": 123,
@@ -82,18 +96,18 @@ var _ = Describe("Task", func() {
 							RespondWith(http.StatusAccepted, response, http.Header{"X-Cf-Warnings": {"warning"}}),
 						),
 					)
+					submitTask = Task{Command: "some command", DiskInMB: uint64(123)}
 				})
 
 				It("creates and returns the task and all warnings with the provided disk size", func() {
-					task, warnings, err := client.CreateApplicationTask("some-app-guid", Task{Command: "some command", DiskInMB: uint64(123)})
-					Expect(err).ToNot(HaveOccurred())
+					Expect(executeErr).ToNot(HaveOccurred())
 
 					Expect(task).To(Equal(Task{DiskInMB: uint64(123), SequenceID: 3}))
 					Expect(warnings).To(ConsistOf("warning"))
 				})
 			})
 
-			Context("when the memory is not 0", func() {
+			When("the memory is not 0", func() {
 				BeforeEach(func() {
 					response := `{
 						"memory_in_mb": 123,
@@ -106,11 +120,12 @@ var _ = Describe("Task", func() {
 							RespondWith(http.StatusAccepted, response, http.Header{"X-Cf-Warnings": {"warning"}}),
 						),
 					)
+
+					submitTask = Task{Command: "some command", MemoryInMB: uint64(123)}
 				})
 
 				It("creates and returns the task and all warnings with the provided memory", func() {
-					task, warnings, err := client.CreateApplicationTask("some-app-guid", Task{Command: "some command", MemoryInMB: uint64(123)})
-					Expect(err).ToNot(HaveOccurred())
+					Expect(executeErr).ToNot(HaveOccurred())
 
 					Expect(task).To(Equal(Task{MemoryInMB: uint64(123), SequenceID: 3}))
 					Expect(warnings).To(ConsistOf("warning"))
@@ -119,7 +134,7 @@ var _ = Describe("Task", func() {
 
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
 					"errors": [
@@ -141,24 +156,23 @@ var _ = Describe("Task", func() {
 						RespondWith(http.StatusTeapot, response, http.Header{"X-Cf-Warnings": {"warning"}}),
 					),
 				)
+
+				submitTask = Task{Command: "some command"}
 			})
 
 			It("returns the errors and all warnings", func() {
-				_, warnings, err := client.CreateApplicationTask("some-app-guid", Task{Command: "some command"})
-				Expect(err).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -168,7 +182,19 @@ var _ = Describe("Task", func() {
 	})
 
 	Describe("GetApplicationTasks", func() {
-		Context("when the application exists", func() {
+		var (
+			submitQuery Query
+
+			tasks      []Task
+			warnings   Warnings
+			executeErr error
+		)
+
+		JustBeforeEach(func() {
+			tasks, warnings, executeErr = client.GetApplicationTasks("some-app-guid", submitQuery)
+		})
+
+		When("the application exists", func() {
 			BeforeEach(func() {
 				response1 := fmt.Sprintf(`{
 					"pagination": {
@@ -222,14 +248,12 @@ var _ = Describe("Task", func() {
 						RespondWith(http.StatusOK, response2, http.Header{"X-Cf-Warnings": {"warning-2"}}),
 					),
 				)
+
+				submitQuery = Query{Key: PerPage, Values: []string{"2"}}
 			})
 
 			It("returns a list of tasks associated with the application and all warnings", func() {
-				tasks, warnings, err := client.GetApplicationTasks(
-					"some-app-guid",
-					Query{Key: PerPage, Values: []string{"2"}},
-				)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(executeErr).ToNot(HaveOccurred())
 
 				Expect(tasks).To(ConsistOf(
 					Task{
@@ -261,7 +285,7 @@ var _ = Describe("Task", func() {
 			})
 		})
 
-		Context("when the application does not exist", func() {
+		When("the application does not exist", func() {
 			BeforeEach(func() {
 				response := `{
 					"errors": [
@@ -281,12 +305,11 @@ var _ = Describe("Task", func() {
 			})
 
 			It("returns a ResourceNotFoundError", func() {
-				_, _, err := client.GetApplicationTasks("some-app-guid")
-				Expect(err).To(MatchError(ccerror.ApplicationNotFoundError{}))
+				Expect(executeErr).To(MatchError(ccerror.ApplicationNotFoundError{}))
 			})
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
 					"errors": [
@@ -311,21 +334,18 @@ var _ = Describe("Task", func() {
 			})
 
 			It("returns the errors and all warnings", func() {
-				_, warnings, err := client.GetApplicationTasks("some-app-guid")
-				Expect(err).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -334,8 +354,18 @@ var _ = Describe("Task", func() {
 		})
 	})
 
-	Describe("UpdateTask", func() {
-		Context("when the request succeeds", func() {
+	Describe("UpdateTaskCancel", func() {
+		var (
+			task       Task
+			warnings   Warnings
+			executeErr error
+		)
+
+		JustBeforeEach(func() {
+			task, warnings, executeErr = client.UpdateTaskCancel("some-task-guid")
+		})
+
+		When("the request succeeds", func() {
 			BeforeEach(func() {
 				response := `{
           "guid": "task-3-guid",
@@ -354,8 +384,7 @@ var _ = Describe("Task", func() {
 			})
 
 			It("returns the task and warnings", func() {
-				task, warnings, err := client.UpdateTask("some-task-guid")
-				Expect(err).ToNot(HaveOccurred())
+				Expect(executeErr).ToNot(HaveOccurred())
 
 				Expect(task).To(Equal(Task{
 					GUID:       "task-3-guid",
@@ -369,7 +398,7 @@ var _ = Describe("Task", func() {
 			})
 		})
 
-		Context("when the request fails", func() {
+		When("the request fails", func() {
 			BeforeEach(func() {
 				response := `{
 					"errors": [
@@ -394,21 +423,18 @@ var _ = Describe("Task", func() {
 			})
 
 			It("returns the errors and all warnings", func() {
-				_, warnings, err := client.UpdateTask("some-task-guid")
-				Expect(err).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))

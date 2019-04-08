@@ -9,13 +9,13 @@ import (
 	"code.cloudfoundry.org/cli/cf/requirements"
 
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
 	"fmt"
 
 	"code.cloudfoundry.org/cli/cf/api/applications/applicationsfakes"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	"code.cloudfoundry.org/cli/plugin/models"
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -305,6 +305,7 @@ var _ = Describe("service command", func() {
 					ServiceInstanceFields: models.ServiceInstanceFields{
 						Name: "service1",
 						GUID: "service1-guid",
+						Type: "user_provided_service_instance",
 					},
 					ServiceBindings: []models.ServiceBindingFields{
 						models.ServiceBindingFields{

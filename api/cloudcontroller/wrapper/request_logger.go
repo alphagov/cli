@@ -41,12 +41,6 @@ func NewRequestLogger(output RequestLoggerOutput) *RequestLogger {
 	}
 }
 
-// Wrap sets the connection on the RequestLogger and returns itself
-func (logger *RequestLogger) Wrap(innerconnection cloudcontroller.Connection) cloudcontroller.Connection {
-	logger.connection = innerconnection
-	return logger
-}
-
 // Make records the request and the response to UI
 func (logger *RequestLogger) Make(request *cloudcontroller.Request, passedResponse *cloudcontroller.Response) error {
 	err := logger.displayRequest(request)
@@ -64,6 +58,12 @@ func (logger *RequestLogger) Make(request *cloudcontroller.Request, passedRespon
 	}
 
 	return err
+}
+
+// Wrap sets the connection on the RequestLogger and returns itself
+func (logger *RequestLogger) Wrap(innerconnection cloudcontroller.Connection) cloudcontroller.Connection {
+	logger.connection = innerconnection
+	return logger
 }
 
 func (logger *RequestLogger) displayRequest(request *cloudcontroller.Request) error {
@@ -137,12 +137,16 @@ func (logger *RequestLogger) displayResponse(passedResponse *cloudcontroller.Res
 	if err != nil {
 		return err
 	}
+	contentType := passedResponse.HTTPResponse.Header["Content-Type"]
+	if len(contentType) > 0 && strings.Contains(contentType[0], "application/x-yaml") {
+		return logger.output.DisplayMessage("[application/x-yaml Content Hidden]")
+	}
 	return logger.output.DisplayJSONBody(passedResponse.RawResponse)
 }
 
 func (logger *RequestLogger) displaySortedHeaders(headers http.Header) error {
 	keys := []string{}
-	for key, _ := range headers {
+	for key := range headers {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)

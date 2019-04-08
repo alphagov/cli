@@ -15,11 +15,11 @@ import (
 	"code.cloudfoundry.org/cli/cf/net"
 	"code.cloudfoundry.org/cli/cf/terminal/terminalfakes"
 	"code.cloudfoundry.org/cli/cf/trace/tracefakes"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testnet "code.cloudfoundry.org/cli/util/testhelpers/net"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testnet "code.cloudfoundry.org/cli/cf/util/testhelpers/net"
 
 	. "code.cloudfoundry.org/cli/cf/api"
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -663,6 +663,7 @@ var _ = Describe("Services Repo", func() {
 			It("renames the service", func() {
 				serviceInstance := models.ServiceInstance{}
 				serviceInstance.GUID = "my-service-instance-guid"
+				serviceInstance.Type = "user_provided_service_instance"
 
 				err := repo.RenameService(serviceInstance, "new-name")
 				Expect(testHandler).To(HaveAllRequestsCalled())

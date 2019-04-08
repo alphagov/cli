@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"code.cloudfoundry.org/cli/cf"
 	"code.cloudfoundry.org/cli/cf/api"
 	"code.cloudfoundry.org/cli/cf/commandregistry"
 	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
@@ -85,23 +84,6 @@ func (cmd *MapRoute) Requirements(requirementsFactory requirements.Factory, fc f
 	cmd.domainReq = requirementsFactory.NewDomainRequirement(domainName)
 
 	var reqs []requirements.Requirement
-
-	if fc.String("path") != "" {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement("Option '--path'", cf.RoutePathMinimumAPIVersion))
-	}
-
-	var flag string
-	switch {
-	case fc.IsSet("port"):
-		flag = "port"
-	case fc.IsSet("random-port"):
-		flag = "random-port"
-	}
-
-	if flag != "" {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement(fmt.Sprintf("Option '--%s'", flag), cf.TCPRoutingMinimumAPIVersion))
-		reqs = append(reqs, requirementsFactory.NewDiegoApplicationRequirement(appName))
-	}
 
 	reqs = append(reqs, []requirements.Requirement{
 		requirementsFactory.NewLoginRequirement(),

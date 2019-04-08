@@ -8,26 +8,39 @@ import (
 
 // EnvOverride represents all the environment variables read by the CF CLI
 type EnvOverride struct {
-	BinaryName       string
-	CFColor          string
-	CFDialTimeout    string
-	CFHome           string
-	CFLogLevel       string
-	CFPluginHome     string
-	CFStagingTimeout string
-	CFStartupTimeout string
-	CFTrace          string
-	DockerPassword   string
-	Experimental     string
-	ForceTTY         string
-	HTTPSProxy       string
-	Lang             string
-	LCAll            string
+	BinaryName        string
+	CFColor           string
+	CFDialTimeout     string
+	CFHome            string
+	CFLogLevel        string
+	CFPassword        string
+	CFPluginHome      string
+	CFStagingTimeout  string
+	CFStartupTimeout  string
+	CFTrace           string
+	CFUsername        string
+	DockerPassword    string
+	Experimental      string
+	ExperimentalLogin string
+	ForceTTY          string
+	HTTPSProxy        string
+	Lang              string
+	LCAll             string
 }
 
 // BinaryName returns the running name of the CF CLI
 func (config *Config) BinaryName() string {
 	return config.ENV.BinaryName
+}
+
+// CFPassword returns the value of the "CF_PASSWORD" environment variable.
+func (config *Config) CFPassword() string {
+	return config.ENV.CFPassword
+}
+
+// CFUsername returns the value of the "CF_USERNAME" environment variable.
+func (config *Config) CFUsername() string {
+	return config.ENV.CFUsername
 }
 
 // DialTimeout returns the timeout to use when dialing. This is based off of:
@@ -64,16 +77,27 @@ func (config *Config) Experimental() bool {
 	return false
 }
 
+// ExperimentalLogin is a temporary function during the rewrite of `cf login` that returns whether or not to run the rewritten login. This
+// is based off of:
+//   1. The $CF_EXPERIMENTAL_LOGIN environment variable if set
+//   2. Defaults to false
+func (config *Config) ExperimentalLogin() bool {
+	if config.ENV.ExperimentalLogin != "" {
+		envVal, err := strconv.ParseBool(config.ENV.ExperimentalLogin)
+		if err == nil {
+			return envVal
+		}
+	}
+
+	return false
+}
+
 // HTTPSProxy returns the proxy url that the CLI should use. The url is based
 // off of:
 //   1. The $https_proxy environment variable if set
 //   2. Defaults to the empty string
 func (config *Config) HTTPSProxy() string {
-	if config.ENV.HTTPSProxy != "" {
-		return config.ENV.HTTPSProxy
-	}
-
-	return ""
+	return config.ENV.HTTPSProxy
 }
 
 // LogLevel returns the global log level. The levels follow Logrus's log level
@@ -110,9 +134,10 @@ func (config *Config) LogLevel() int {
 //   2. Defaults to the DefaultStagingTimeout
 func (config *Config) StagingTimeout() time.Duration {
 	if config.ENV.CFStagingTimeout != "" {
-		val, err := strconv.ParseInt(config.ENV.CFStagingTimeout, 10, 64)
+		timeoutInMin, err := strconv.ParseFloat(config.ENV.CFStagingTimeout, 64)
+		timeoutInSec := int64(timeoutInMin * 60)
 		if err == nil {
-			return time.Duration(val) * time.Minute
+			return time.Duration(timeoutInSec) * time.Second
 		}
 	}
 
@@ -125,9 +150,10 @@ func (config *Config) StagingTimeout() time.Duration {
 //   2. Defaults to the DefaultStartupTimeout
 func (config *Config) StartupTimeout() time.Duration {
 	if config.ENV.CFStartupTimeout != "" {
-		val, err := strconv.ParseInt(config.ENV.CFStartupTimeout, 10, 64)
+		timeoutInMin, err := strconv.ParseFloat(config.ENV.CFStartupTimeout, 64)
+		timeoutInSec := int64(timeoutInMin * 60)
 		if err == nil {
-			return time.Duration(val) * time.Minute
+			return time.Duration(timeoutInSec) * time.Second
 		}
 	}
 

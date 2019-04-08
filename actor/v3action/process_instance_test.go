@@ -27,7 +27,9 @@ var _ = Describe("instance actions", func() {
 	Describe("Instance", func() {
 		Describe("StartTime", func() {
 			It("returns the time that the instance started", func() {
-				instance := ProcessInstance{Uptime: 86400}
+				uptime, err := time.ParseDuration("86400s")
+				Expect(err).ToNot(HaveOccurred())
+				instance := ProcessInstance{Uptime: uptime}
 				Expect(instance.StartTime()).To(BeTemporally("~", time.Now().Add(-24*time.Hour), 10*time.Second))
 			})
 		})
@@ -43,7 +45,7 @@ var _ = Describe("instance actions", func() {
 			warnings, executeErr = actor.DeleteInstanceByApplicationNameSpaceProcessTypeAndIndex("some-app-name", "some-space-guid", "some-process-type", 666)
 		})
 
-		Context("when getting the application returns an error", func() {
+		When("getting the application returns an error", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns([]ccv3.Application{}, ccv3.Warnings{"some-get-app-warning"}, errors.New("some-get-app-error"))
 			})
@@ -54,12 +56,12 @@ var _ = Describe("instance actions", func() {
 			})
 		})
 
-		Context("when getting the application succeeds", func() {
+		When("getting the application succeeds", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns([]ccv3.Application{{GUID: "some-app-guid"}}, ccv3.Warnings{"some-get-app-warning"}, nil)
 			})
 
-			Context("when deleting the instance returns ProcessNotFoundError", func() {
+			When("deleting the instance returns ProcessNotFoundError", func() {
 				BeforeEach(func() {
 					fakeCloudControllerClient.DeleteApplicationProcessInstanceReturns(ccv3.Warnings{"some-delete-warning"}, ccerror.ProcessNotFoundError{})
 				})
@@ -70,7 +72,7 @@ var _ = Describe("instance actions", func() {
 				})
 			})
 
-			Context("when deleting the instance returns InstanceNotFoundError", func() {
+			When("deleting the instance returns InstanceNotFoundError", func() {
 				BeforeEach(func() {
 					fakeCloudControllerClient.DeleteApplicationProcessInstanceReturns(ccv3.Warnings{"some-delete-warning"}, ccerror.InstanceNotFoundError{})
 				})
@@ -81,7 +83,7 @@ var _ = Describe("instance actions", func() {
 				})
 			})
 
-			Context("when deleting the instance returns other error", func() {
+			When("deleting the instance returns other error", func() {
 				BeforeEach(func() {
 					fakeCloudControllerClient.DeleteApplicationProcessInstanceReturns(ccv3.Warnings{"some-delete-warning"}, errors.New("some-delete-error"))
 				})
@@ -92,7 +94,7 @@ var _ = Describe("instance actions", func() {
 				})
 			})
 
-			Context("when deleting the instance succeeds", func() {
+			When("deleting the instance succeeds", func() {
 				BeforeEach(func() {
 					fakeCloudControllerClient.DeleteApplicationProcessInstanceReturns(ccv3.Warnings{"some-delete-warning"}, nil)
 				})

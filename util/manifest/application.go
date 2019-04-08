@@ -9,7 +9,7 @@ import (
 
 type Application struct {
 	Buildpack      types.FilteredString
-	Buildpacks     types.FilteredStrings
+	Buildpacks     []string
 	Command        types.FilteredString
 	DiskQuota      types.NullByteSizeInMb
 	DockerImage    string
@@ -21,7 +21,7 @@ type Application struct {
 	// guaranteed, although CLI only ships strings).
 	EnvironmentVariables    map[string]string
 	HealthCheckHTTPEndpoint string
-	HealthCheckTimeout      int
+	HealthCheckTimeout      uint64
 	// HealthCheckType attribute defines the number of seconds that is allocated
 	// for starting an application.
 	HealthCheckType string
@@ -45,39 +45,10 @@ type Application struct {
 	DeprecatedNoHostname interface{}
 }
 
-func (app Application) String() string {
-	return fmt.Sprintf(
-		"App Name: '%s', Buildpack IsSet: %t, Buildpack: '%s',  Buildpacks: [%s], Command IsSet: %t, Command: '%s', Disk Quota: '%s', Docker Image: '%s', Droplet Path: '%s', Health Check HTTP Endpoint: '%s', Health Check Timeout: '%d', Health Check Type: '%s', Hostname: '%s', Instances IsSet: %t, Instances: '%d', Memory: '%s', No-Hostname: %t, No-Route: %t, Path: '%s', RandomRoute: %t, RoutePath: '%s', Routes: [%s], Services: [%s], Stack Name: '%s'",
-		app.Name,
-		app.Buildpack.IsSet,
-		app.Buildpack.Value,
-		app.Buildpacks,
-		app.Command.IsSet,
-		app.Command.Value,
-		app.DiskQuota,
-		app.DockerImage,
-		app.DropletPath,
-		app.HealthCheckHTTPEndpoint,
-		app.HealthCheckTimeout,
-		app.HealthCheckType,
-		app.Hostname,
-		app.Instances.IsSet,
-		app.Instances.Value,
-		app.Memory,
-		app.NoHostname,
-		app.NoRoute,
-		app.Path,
-		app.RandomRoute,
-		app.RoutePath,
-		strings.Join(app.Routes, ", "),
-		strings.Join(app.Services, ", "),
-		app.StackName,
-	)
-}
-
 func (app Application) MarshalYAML() (interface{}, error) {
 	var m = rawManifestApplication{
 		Buildpack:               app.Buildpack.Value,
+		Buildpacks:              app.Buildpacks,
 		Command:                 app.Command.Value,
 		Docker:                  rawDockerInfo{Image: app.DockerImage, Username: app.DockerUsername},
 		DropletPath:             app.DropletPath,
@@ -104,6 +75,36 @@ func (app Application) MarshalYAML() (interface{}, error) {
 	}
 
 	return m, nil
+}
+
+func (app Application) String() string {
+	return fmt.Sprintf(
+		"App Name: '%s', Buildpack IsSet: %t, Buildpack: '%s',  Buildpacks: [%s], Command IsSet: %t, Command: '%s', Disk Quota: '%s', Docker Image: '%s', Droplet Path: '%s', Health Check HTTP Endpoint: '%s', Health Check Timeout: '%d', Health Check Type: '%s', Hostname: '%s', Instances IsSet: %t, Instances: '%d', Memory: '%s', No-Hostname: %t, No-Route: %t, Path: '%s', RandomRoute: %t, RoutePath: '%s', Routes: [%s], Services: [%s], Stack Name: '%s'",
+		app.Name,
+		app.Buildpack.IsSet,
+		app.Buildpack.Value,
+		strings.Join(app.Buildpacks, ", "),
+		app.Command.IsSet,
+		app.Command.Value,
+		app.DiskQuota,
+		app.DockerImage,
+		app.DropletPath,
+		app.HealthCheckHTTPEndpoint,
+		app.HealthCheckTimeout,
+		app.HealthCheckType,
+		app.Hostname,
+		app.Instances.IsSet,
+		app.Instances.Value,
+		app.Memory,
+		app.NoHostname,
+		app.NoRoute,
+		app.Path,
+		app.RandomRoute,
+		app.RoutePath,
+		strings.Join(app.Routes, ", "),
+		strings.Join(app.Services, ", "),
+		app.StackName,
+	)
 }
 
 func (app *Application) UnmarshalYAML(unmarshaller func(interface{}) error) error {
@@ -159,12 +160,14 @@ func (app *Application) UnmarshalYAML(unmarshaller func(interface{}) error) erro
 		app.Buildpack.IsSet = true
 	}
 
-	if _, ok := exists["buildpacks"]; ok {
+	if buildpacks, ok := exists["buildpacks"]; ok {
+		if buildpacks == nil {
+			return EmptyBuildpacksError{}
+		}
+
+		app.Buildpacks = []string{}
 		for _, buildpack := range m.Buildpacks {
-			bp := types.FilteredString{}
-			bp.ParseValue(buildpack)
-			bp.IsSet = true
-			app.Buildpacks = append(app.Buildpacks, bp)
+			app.Buildpacks = append(app.Buildpacks, buildpack)
 		}
 	}
 

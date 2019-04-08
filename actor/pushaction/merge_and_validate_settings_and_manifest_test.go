@@ -8,7 +8,6 @@ import (
 	. "code.cloudfoundry.org/cli/actor/pushaction"
 	"code.cloudfoundry.org/cli/types"
 	"code.cloudfoundry.org/cli/util/manifest"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -23,11 +22,11 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 	)
 
 	BeforeEach(func() {
-		actor = NewActor(nil, nil, nil)
+		actor, _, _, _ = getTestPushActor()
 		currentDirectory = getCurrentDir()
 	})
 
-	Context("when only passed command line settings", func() {
+	When("only passed command line settings", func() {
 		BeforeEach(func() {
 			cmdSettings = CommandLineSettings{
 				CurrentDirectory: currentDirectory,
@@ -46,7 +45,7 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 		})
 	})
 
-	Context("when passed command line settings and a single manifest application", func() {
+	When("passed command line settings and a single manifest application", func() {
 		var (
 			apps       []manifest.Application
 			mergedApps []manifest.Application
@@ -84,7 +83,7 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 		})
 	})
 
-	Context("when passed command line settings and multiple manifest applications", func() {
+	When("passed command line settings and multiple manifest applications", func() {
 		var (
 			apps       []manifest.Application
 			mergedApps []manifest.Application
@@ -121,8 +120,8 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 			))
 		})
 
-		Context("when CommandLineSettings specify an app in the manifests", func() {
-			Context("when the app exists in the manifest", func() {
+		When("CommandLineSettings specify an app in the manifests", func() {
+			When("the app exists in the manifest", func() {
 				BeforeEach(func() {
 					cmdSettings.Name = "app-1"
 				})
@@ -139,7 +138,7 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 				})
 			})
 
-			Context("when the app does *not* exist in the manifest", func() {
+			When("the app does *not* exist in the manifest", func() {
 				BeforeEach(func() {
 					cmdSettings.Name = "app-4"
 				})
@@ -173,7 +172,7 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 			mergedApps, executeErr = actor.MergeAndValidateSettingsAndManifests(cmdSettings, apps)
 		})
 
-		Context("when HealthCheckType is set to http and no endpoint is set", func() {
+		When("HealthCheckType is set to http and no endpoint is set", func() {
 			BeforeEach(func() {
 				apps[0].HealthCheckType = "http"
 				apps[1].HealthCheckType = "http"
@@ -219,7 +218,7 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 			mergedApps, executeErr = actor.MergeAndValidateSettingsAndManifests(cmdSettings, apps)
 		})
 
-		Context("when app path is set from the command line", func() {
+		When("app path is set from the command line", func() {
 			BeforeEach(func() {
 				cmdSettings.ProvidedAppPath = tempDir
 			})
@@ -230,7 +229,7 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 			})
 		})
 
-		Context("when app path is set from the manifest", func() {
+		When("app path is set from the manifest", func() {
 			BeforeEach(func() {
 				apps[0].Path = tempDir
 			})
@@ -317,7 +316,7 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 
 		Entry("CommandLineOptionsWithMultipleAppsError",
 			CommandLineSettings{
-				Buildpack: types.FilteredString{IsSet: true},
+				Buildpacks: []string{"some-buildpack"},
 			},
 			manifestWithMultipleApps,
 			actionerror.CommandLineOptionsWithMultipleAppsError{}),
@@ -661,14 +660,65 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 				AppName:    "some-name-1",
 				Properties: []string{"route-path", "no-route"},
 			}),
+		Entry("PropertyCombinationError",
+			CommandLineSettings{},
+			[]manifest.Application{{
+				Name:       "some-name-1",
+				Path:       RealPath,
+				Buildpack:  types.FilteredString{Value: "some-buildpack", IsSet: true},
+				Buildpacks: []string{},
+			}},
+			actionerror.PropertyCombinationError{
+				AppName:    "some-name-1",
+				Properties: []string{"buildpack", "buildpacks"},
+			},
+		),
+		Entry("PropertyCombinationError",
+			CommandLineSettings{},
+			[]manifest.Application{{
+				Name:        "some-name-1",
+				DockerImage: "some-docker-image",
+				Buildpacks:  []string{},
+			}},
+			actionerror.PropertyCombinationError{
+				AppName:    "some-name-1",
+				Properties: []string{"docker", "buildpacks"},
+			},
+		),
+		Entry("PropertyCombinationError",
+			CommandLineSettings{
+				DropletPath: "some-droplet",
+			},
+			[]manifest.Application{{
+				Name:       "some-name-1",
+				Buildpacks: []string{},
+			}},
+			actionerror.PropertyCombinationError{
+				AppName:    "some-name-1",
+				Properties: []string{"droplet", "buildpacks"},
+			},
+		),
+		Entry("PropertyCombinationError",
+			CommandLineSettings{
+				DropletPath: "some-droplet",
+			},
+			[]manifest.Application{{
+				Name:      "some-name-1",
+				Buildpack: types.FilteredString{Value: "some-buildpack", IsSet: true},
+			}},
+			actionerror.PropertyCombinationError{
+				AppName:    "some-name-1",
+				Properties: []string{"droplet", "buildpack"},
+			},
+		),
 		Entry("HTTPHealthCheckInvalidError",
 			CommandLineSettings{
 				HealthCheckType: "port",
 			},
 			[]manifest.Application{{
-				Name: "some-name-1",
+				Name:                    "some-name-1",
 				HealthCheckHTTPEndpoint: "/some/endpoint",
-				Path: RealPath,
+				Path:                    RealPath,
 			}},
 			actionerror.HTTPHealthCheckInvalidError{}),
 		Entry("HTTPHealthCheckInvalidError",
@@ -677,7 +727,7 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 				Name:                    "some-name-1",
 				HealthCheckType:         "port",
 				HealthCheckHTTPEndpoint: "/some/endpoint",
-				Path: RealPath,
+				Path:                    RealPath,
 			}},
 			actionerror.HTTPHealthCheckInvalidError{}),
 		Entry("HTTPHealthCheckInvalidError",
@@ -685,9 +735,9 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 				HealthCheckType: "process",
 			},
 			[]manifest.Application{{
-				Name: "some-name-1",
+				Name:                    "some-name-1",
 				HealthCheckHTTPEndpoint: "/some/endpoint",
-				Path: RealPath,
+				Path:                    RealPath,
 			}},
 			actionerror.HTTPHealthCheckInvalidError{}),
 		Entry("HTTPHealthCheckInvalidError",
@@ -696,16 +746,34 @@ var _ = Describe("MergeAndValidateSettingsAndManifest", func() {
 				Name:                    "some-name-1",
 				HealthCheckType:         "process",
 				HealthCheckHTTPEndpoint: "/some/endpoint",
-				Path: RealPath,
+				Path:                    RealPath,
 			}},
 			actionerror.HTTPHealthCheckInvalidError{}),
 		Entry("HTTPHealthCheckInvalidError",
 			CommandLineSettings{},
 			[]manifest.Application{{
-				Name: "some-name-1",
+				Name:                    "some-name-1",
 				HealthCheckHTTPEndpoint: "/some/endpoint",
-				Path: RealPath,
+				Path:                    RealPath,
 			}},
 			actionerror.HTTPHealthCheckInvalidError{}),
+		Entry("InvalidBuildpacksError",
+			CommandLineSettings{
+				Buildpacks: []string{"null", "some-buildpack"},
+			},
+			[]manifest.Application{{
+				Name: "some-name-1",
+				Path: RealPath,
+			}},
+			actionerror.InvalidBuildpacksError{}),
+		Entry("InvalidBuildpacksError",
+			CommandLineSettings{
+				Buildpacks: []string{"default", "some-buildpack"},
+			},
+			[]manifest.Application{{
+				Name: "some-name-1",
+				Path: RealPath,
+			}},
+			actionerror.InvalidBuildpacksError{}),
 	)
 })

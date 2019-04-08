@@ -10,7 +10,6 @@ import (
 	"code.cloudfoundry.org/cli/api/cloudcontroller"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2/internal"
-	"code.cloudfoundry.org/cli/api/cloudcontroller/ccversion"
 	"code.cloudfoundry.org/cli/types"
 )
 
@@ -62,44 +61,35 @@ func (route *Route) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UpdateRouteApplication creates a link between the route and application.
-func (client *Client) UpdateRouteApplication(routeGUID string, appGUID string) (Route, Warnings, error) {
+// CheckRoute returns true if the route exists in the CF instance.
+func (client *Client) CheckRoute(route Route) (bool, Warnings, error) {
 	request, err := client.newHTTPRequest(requestOptions{
-		RequestName: internal.PutRouteAppRequest,
-		URIParams: map[string]string{
-			"app_guid":   appGUID,
-			"route_guid": routeGUID,
-		},
+		RequestName: internal.GetRouteReservedRequest,
+		URIParams:   map[string]string{"domain_guid": route.DomainGUID},
 	})
 	if err != nil {
-		return Route{}, nil, err
+		return false, nil, err
 	}
 
-	var route Route
-	response := cloudcontroller.Response{
-		Result: &route,
+	queryParams := url.Values{}
+	if route.Host != "" {
+		queryParams.Add("host", route.Host)
 	}
-	err = client.connection.Make(request, &response)
-
-	return route, response.Warnings, err
-}
-
-// DeleteRouteApplication removes the link between the route and application.
-func (client *Client) DeleteRouteApplication(routeGUID string, appGUID string) (Warnings, error) {
-	request, err := client.newHTTPRequest(requestOptions{
-		RequestName: internal.DeleteRouteAppRequest,
-		URIParams: map[string]string{
-			"app_guid":   appGUID,
-			"route_guid": routeGUID,
-		},
-	})
-	if err != nil {
-		return nil, err
+	if route.Path != "" {
+		queryParams.Add("path", route.Path)
 	}
+	if route.Port.IsSet {
+		queryParams.Add("port", fmt.Sprint(route.Port.Value))
+	}
+	request.URL.RawQuery = queryParams.Encode()
 
 	var response cloudcontroller.Response
 	err = client.connection.Make(request, &response)
-	return response.Warnings, err
+	if _, ok := err.(ccerror.ResourceNotFoundError); ok {
+		return false, response.Warnings, nil
+	}
+
+	return response.HTTPResponse.StatusCode == http.StatusNoContent, response.Warnings, err
 }
 
 // CreateRoute creates the route with the given properties; SpaceGUID and
@@ -130,11 +120,60 @@ func (client *Client) CreateRoute(route Route, generatePort bool) (Route, Warnin
 
 	var updatedRoute Route
 	response := cloudcontroller.Response{
-		Result: &updatedRoute,
+		DecodeJSONResponseInto: &updatedRoute,
 	}
 
 	err = client.connection.Make(request, &response)
 	return updatedRoute, response.Warnings, err
+}
+
+// DeleteRoute deletes the Route associated with the provided Route GUID.
+func (client *Client) DeleteRoute(routeGUID string) (Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.DeleteRouteRequest,
+		URIParams:   map[string]string{"route_guid": routeGUID},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var response cloudcontroller.Response
+	err = client.connection.Make(request, &response)
+	return response.Warnings, err
+}
+
+// DeleteRouteApplication removes the link between the route and application.
+func (client *Client) DeleteRouteApplication(routeGUID string, appGUID string) (Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.DeleteRouteAppRequest,
+		URIParams: map[string]string{
+			"app_guid":   appGUID,
+			"route_guid": routeGUID,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var response cloudcontroller.Response
+	err = client.connection.Make(request, &response)
+	return response.Warnings, err
+}
+
+// DeleteSpaceUnmappedRoutes deletes Routes within a specified Space not mapped
+// to an Application
+func (client *Client) DeleteSpaceUnmappedRoutes(spaceGUID string) (Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.DeleteSpaceUnmappedRoutesRequest,
+		URIParams:   map[string]string{"space_guid": spaceGUID},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var response cloudcontroller.Response
+	err = client.connection.Make(request, &response)
+	return response.Warnings, err
 }
 
 // GetApplicationRoutes returns a list of Routes associated with the provided
@@ -143,6 +182,51 @@ func (client *Client) GetApplicationRoutes(appGUID string, filters ...Filter) ([
 	request, err := client.newHTTPRequest(requestOptions{
 		RequestName: internal.GetAppRoutesRequest,
 		URIParams:   map[string]string{"app_guid": appGUID},
+		Query:       ConvertFilterParameters(filters),
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var fullRoutesList []Route
+	warnings, err := client.paginate(request, Route{}, func(item interface{}) error {
+		if route, ok := item.(Route); ok {
+			fullRoutesList = append(fullRoutesList, route)
+		} else {
+			return ccerror.UnknownObjectInListError{
+				Expected:   Route{},
+				Unexpected: item,
+			}
+		}
+		return nil
+	})
+
+	return fullRoutesList, warnings, err
+}
+
+// GetRoute returns a route with the provided guid.
+func (client *Client) GetRoute(guid string) (Route, Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.GetRouteRequest,
+		URIParams:   Params{"route_guid": guid},
+	})
+	if err != nil {
+		return Route{}, nil, err
+	}
+
+	var route Route
+	response := cloudcontroller.Response{
+		DecodeJSONResponseInto: &route,
+	}
+
+	err = client.connection.Make(request, &response)
+	return route, response.Warnings, err
+}
+
+// GetRoutes returns a list of Routes based off of the provided filters.
+func (client *Client) GetRoutes(filters ...Filter) ([]Route, Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.GetRoutesRequest,
 		Query:       ConvertFilterParameters(filters),
 	})
 	if err != nil {
@@ -193,11 +277,14 @@ func (client *Client) GetSpaceRoutes(spaceGUID string, filters ...Filter) ([]Rou
 	return fullRoutesList, warnings, err
 }
 
-// GetRoute returns a route with the provided guid.
-func (client *Client) GetRoute(guid string) (Route, Warnings, error) {
+// UpdateRouteApplication creates a link between the route and application.
+func (client *Client) UpdateRouteApplication(routeGUID string, appGUID string) (Route, Warnings, error) {
 	request, err := client.newHTTPRequest(requestOptions{
-		RequestName: internal.GetRouteRequest,
-		URIParams:   Params{"route_guid": guid},
+		RequestName: internal.PutRouteAppRequest,
+		URIParams: map[string]string{
+			"app_guid":   appGUID,
+			"route_guid": routeGUID,
+		},
 	})
 	if err != nil {
 		return Route{}, nil, err
@@ -205,96 +292,11 @@ func (client *Client) GetRoute(guid string) (Route, Warnings, error) {
 
 	var route Route
 	response := cloudcontroller.Response{
-		Result: &route,
+		DecodeJSONResponseInto: &route,
 	}
-
 	err = client.connection.Make(request, &response)
+
 	return route, response.Warnings, err
-}
-
-// GetRoutes returns a list of Routes based off of the provided filters.
-func (client *Client) GetRoutes(filters ...Filter) ([]Route, Warnings, error) {
-	request, err := client.newHTTPRequest(requestOptions{
-		RequestName: internal.GetRoutesRequest,
-		Query:       ConvertFilterParameters(filters),
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var fullRoutesList []Route
-	warnings, err := client.paginate(request, Route{}, func(item interface{}) error {
-		if route, ok := item.(Route); ok {
-			fullRoutesList = append(fullRoutesList, route)
-		} else {
-			return ccerror.UnknownObjectInListError{
-				Expected:   Route{},
-				Unexpected: item,
-			}
-		}
-		return nil
-	})
-
-	return fullRoutesList, warnings, err
-}
-
-// DeleteRoute deletes the Route associated with the provided Route GUID.
-func (client *Client) DeleteRoute(routeGUID string) (Warnings, error) {
-	request, err := client.newHTTPRequest(requestOptions{
-		RequestName: internal.DeleteRouteRequest,
-		URIParams:   map[string]string{"route_guid": routeGUID},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	var response cloudcontroller.Response
-	err = client.connection.Make(request, &response)
-	return response.Warnings, err
-}
-
-// DoesRouteExist returns true if the route exists in the CF instance. DomainGUID
-// is required for check. This call will only work for CC API 2.55 or higher.
-func (client *Client) DoesRouteExist(route Route) (bool, Warnings, error) {
-	currentVersion := client.APIVersion()
-	switch {
-	case cloudcontroller.MinimumAPIVersionCheck(currentVersion, ccversion.MinVersionNoHostInReservedRouteEndpoint) == nil:
-		return client.checkRoute(route)
-	case cloudcontroller.MinimumAPIVersionCheck(currentVersion, ccversion.MinVersionHTTPRoutePath) == nil:
-		return client.checkRouteDeprecated(route.DomainGUID, route.Host, route.Path)
-	default:
-		return client.checkRouteDeprecated(route.DomainGUID, route.Host, "")
-	}
-}
-
-func (client *Client) checkRoute(route Route) (bool, Warnings, error) {
-	request, err := client.newHTTPRequest(requestOptions{
-		RequestName: internal.GetRouteReservedRequest,
-		URIParams:   map[string]string{"domain_guid": route.DomainGUID},
-	})
-	if err != nil {
-		return false, nil, err
-	}
-
-	queryParams := url.Values{}
-	if route.Host != "" {
-		queryParams.Add("host", route.Host)
-	}
-	if route.Path != "" {
-		queryParams.Add("path", route.Path)
-	}
-	if route.Port.IsSet {
-		queryParams.Add("port", fmt.Sprint(route.Port.Value))
-	}
-	request.URL.RawQuery = queryParams.Encode()
-
-	var response cloudcontroller.Response
-	err = client.connection.Make(request, &response)
-	if _, ok := err.(ccerror.ResourceNotFoundError); ok {
-		return false, response.Warnings, nil
-	}
-
-	return response.HTTPResponse.StatusCode == http.StatusNoContent, response.Warnings, err
 }
 
 func (client *Client) checkRouteDeprecated(domainGUID string, host string, path string) (bool, Warnings, error) {

@@ -23,21 +23,15 @@ func TestCloudcontrollerv2(t *testing.T) {
 
 var server *Server
 
-var _ = SynchronizedBeforeSuite(func() []byte {
-	return []byte{}
-}, func(data []byte) {
+var _ = BeforeEach(func() {
 	server = NewTLSServer()
 
 	// Suppresses ginkgo server logs
 	server.HTTPTestServer.Config.ErrorLog = log.New(&bytes.Buffer{}, "", 0)
 })
 
-var _ = SynchronizedAfterSuite(func() {
+var _ = AfterEach(func() {
 	server.Close()
-}, func() {})
-
-var _ = BeforeEach(func() {
-	server.Reset()
 })
 
 func NewTestClient(passed ...Config) *Client {
@@ -59,7 +53,7 @@ func NewClientWithCustomAPIVersion(apiVersion string, passed ...Config) *Client 
 	client := NewClient(config)
 	warnings, err := client.TargetCF(TargetSettings{
 		SkipSSLValidation: true,
-		URL:               server.URL(),
+		URL:               server.URL() + "/",
 	})
 	Expect(err).ToNot(HaveOccurred())
 	Expect(warnings).To(BeEmpty())
@@ -93,4 +87,8 @@ func SetupV2InfoResponse(apiVersion string) {
 			RespondWith(http.StatusOK, response),
 		),
 	)
+}
+
+func validateV2InfoPlusNumberOfRequests(numberOfPostInfoRequests int) {
+	Expect(server.ReceivedRequests()).To(HaveLen(numberOfPostInfoRequests + 1))
 }

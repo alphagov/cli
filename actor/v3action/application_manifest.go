@@ -9,7 +9,7 @@ import (
 
 type ManifestParser interface {
 	AppNames() []string
-	RawManifest(name string) ([]byte, error)
+	RawAppManifest(name string) ([]byte, error)
 }
 
 // ApplyApplicationManifest reads in the manifest from the path and provides it
@@ -18,7 +18,7 @@ func (actor Actor) ApplyApplicationManifest(parser ManifestParser, spaceGUID str
 	var allWarnings Warnings
 
 	for _, appName := range parser.AppNames() {
-		rawManifest, err := parser.RawManifest(appName)
+		rawManifest, err := parser.RawAppManifest(appName)
 		if err != nil {
 			return allWarnings, err
 		}
@@ -39,8 +39,8 @@ func (actor Actor) ApplyApplicationManifest(parser ManifestParser, spaceGUID str
 		pollWarnings, err := actor.CloudControllerClient.PollJob(jobURL)
 		allWarnings = append(allWarnings, pollWarnings...)
 		if err != nil {
-			if newErr, ok := err.(ccerror.JobFailedError); ok {
-				return allWarnings, actionerror.ApplicationManifestError{Message: newErr.Message}
+			if newErr, ok := err.(ccerror.V3JobFailedError); ok {
+				return allWarnings, actionerror.ApplicationManifestError{Message: newErr.Detail}
 			}
 			return allWarnings, err
 		}

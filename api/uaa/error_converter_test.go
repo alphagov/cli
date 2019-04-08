@@ -32,7 +32,7 @@ var _ = Describe("Error Wrapper", func() {
 	})
 
 	Describe("Make", func() {
-		Context("when the error is not from the UAA", func() {
+		When("the error is not from the UAA", func() {
 			BeforeEach(func() {
 				fakeConnectionErr.StatusCode = http.StatusTeapot
 				fakeConnectionErr.RawResponse = []byte("an error that's not from the UAA server")
@@ -49,7 +49,7 @@ var _ = Describe("Error Wrapper", func() {
 			})
 		})
 
-		Context("when the error is from the UAA", func() {
+		When("the error is from the UAA", func() {
 			Context("(400) Bad Request", func() {
 				BeforeEach(func() {
 					fakeConnectionErr.StatusCode = http.StatusBadRequest
@@ -119,7 +119,7 @@ var _ = Describe("Error Wrapper", func() {
 					})
 				})
 
-				Context("unauthorized", func() {
+				Context("unauthorized with bad credentials", func() {
 					BeforeEach(func() {
 						fakeConnectionErr.RawResponse = []byte(`{
   "error": "unauthorized",
@@ -131,7 +131,23 @@ var _ = Describe("Error Wrapper", func() {
 					It("returns a BadCredentialsError", func() {
 						Expect(fakeConnection.MakeCallCount()).To(Equal(1))
 
-						Expect(makeErr).To(MatchError(BadCredentialsError{Message: "Bad credentials"}))
+						Expect(makeErr).To(MatchError(UnauthorizedError{Message: "Bad credentials"}))
+					})
+				})
+
+				Context("unauthorized - too many failed login attempts", func() {
+					BeforeEach(func() {
+						fakeConnectionErr.RawResponse = []byte(`{
+  "error": "unauthorized",
+  "error_description": "Your account has been locked because of too many failed attempts to login."
+}`)
+						fakeConnection.MakeReturns(fakeConnectionErr)
+					})
+
+					It("returns a BadCredentialsError", func() {
+						Expect(fakeConnection.MakeCallCount()).To(Equal(1))
+
+						Expect(makeErr).To(MatchError(AccountLockedError{Message: "Your account has been locked because of too many failed attempts to login."}))
 					})
 				})
 			})

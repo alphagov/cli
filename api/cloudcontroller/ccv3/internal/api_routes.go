@@ -11,18 +11,25 @@ import "net/http"
 const (
 	DeleteApplicationProcessInstanceRequest                     = "DeleteApplicationProcessInstance"
 	DeleteApplicationRequest                                    = "DeleteApplication"
+	DeleteBuildpackRequest                                      = "DeleteBuildpack"
 	DeleteIsolationSegmentRelationshipOrganizationRequest       = "DeleteIsolationSegmentRelationshipOrganization"
 	DeleteIsolationSegmentRequest                               = "DeleteIsolationSegment"
 	DeleteServiceInstanceRelationshipsSharedSpaceRequest        = "DeleteServiceInstanceRelationshipsSharedSpace"
 	GetApplicationDropletCurrentRequest                         = "GetApplicationDropletCurrent"
 	GetApplicationEnvRequest                                    = "GetApplicationEnv"
+	GetApplicationManifestRequest                               = "GetApplicationManifest"
 	GetApplicationProcessesRequest                              = "GetApplicationProcesses"
 	GetApplicationProcessRequest                                = "GetApplicationProcess"
 	GetApplicationsRequest                                      = "GetApplications"
 	GetApplicationTasksRequest                                  = "GetApplicationTasks"
+	GetBuildpacksRequest                                        = "GetBuildpacks"
 	GetBuildRequest                                             = "GetBuild"
+	GetDeploymentRequest                                        = "GetDeployment"
+	GetDeploymentsRequest                                       = "GetDeployments"
 	GetDropletRequest                                           = "GetDroplet"
 	GetDropletsRequest                                          = "GetDroplets"
+	GetFeatureFlagRequest                                       = "GetFeatureFlag"
+	GetFeatureFlagsRequest                                      = "GetFeatureFlags"
 	GetIsolationSegmentOrganizationsRequest                     = "GetIsolationSegmentOrganizations"
 	GetIsolationSegmentRequest                                  = "GetIsolationSegment"
 	GetIsolationSegmentsRequest                                 = "GetIsolationSegments"
@@ -34,37 +41,35 @@ const (
 	GetServiceInstancesRequest                                  = "GetServiceInstances"
 	GetSpaceRelationshipIsolationSegmentRequest                 = "GetSpaceRelationshipIsolationSegment"
 	GetSpacesRequest                                            = "GetSpaces"
+	GetStacksRequest                                            = "GetStacks"
 	PatchApplicationCurrentDropletRequest                       = "PatchApplicationCurrentDroplet"
 	PatchApplicationEnvironmentVariablesRequest                 = "PatchApplicationEnvironmentVariables"
 	PatchApplicationRequest                                     = "PatchApplication"
+	PatchBuildpackRequest                                       = "PatchBuildpack"
+	PatchFeatureFlagRequest                                     = "PatchFeatureFlag"
 	PatchOrganizationRelationshipDefaultIsolationSegmentRequest = "PatchOrganizationRelationshipDefaultIsolationSegment"
 	PatchProcessRequest                                         = "PatchProcess"
 	PatchSpaceRelationshipIsolationSegmentRequest               = "PatchSpaceRelationshipIsolationSegment"
 	PostApplicationActionApplyManifest                          = "PostApplicationActionApplyM"
+	PostApplicationActionRestartRequest                         = "PostApplicationActionRestart"
 	PostApplicationActionStartRequest                           = "PostApplicationActionStart"
 	PostApplicationActionStopRequest                            = "PostApplicationActionStop"
+	PostApplicationDeploymentActionCancelRequest                = "PostApplicationDeploymentActionCancel"
+	PostApplicationDeploymentRequest                            = "PostApplicationDeployment"
 	PostApplicationProcessActionScaleRequest                    = "PostApplicationProcessActionScale"
 	PostApplicationRequest                                      = "PostApplication"
 	PostApplicationTasksRequest                                 = "PostApplicationTasks"
 	PostBuildRequest                                            = "PostBuild"
+	PostBuildpackBitsRequest                                    = "PostBuildpackBits"
+	PostBuildpackRequest                                        = "PostBuildpack"
+	PostDomainRequest                                           = "PostDomain"
 	PostIsolationSegmentRelationshipOrganizationsRequest        = "PostIsolationSegmentRelationshipOrganizations"
 	PostIsolationSegmentsRequest                                = "PostIsolationSegments"
 	PostPackageRequest                                          = "PostPackage"
+	PostResourceMatchesRequest                                  = "PostResourceMatches"
 	PostServiceInstanceRelationshipsSharedSpacesRequest         = "PostServiceInstanceRelationshipsSharedSpaces"
+	PostSpaceActionApplyManifestRequest                         = "PostSpaceActionApplyManifest"
 	PutTaskCancelRequest                                        = "PutTaskCancel"
-)
-
-const (
-	AppsResource              = "apps"
-	BuildsResource            = "builds"
-	DropletsResource          = "droplets"
-	IsolationSegmentsResource = "isolation_segments"
-	OrgsResource              = "organizations"
-	PackagesResource          = "packages"
-	ProcessesResource         = "processes"
-	ServiceInstancesResource  = "service_instances"
-	SpacesResource            = "spaces"
-	TasksResource             = "tasks"
 )
 
 // APIRoutes is a list of routes used by the router to construct request URLs.
@@ -74,11 +79,13 @@ var APIRoutes = []Route{
 	{Resource: AppsResource, Path: "/:app_guid", Method: http.MethodDelete, Name: DeleteApplicationRequest},
 	{Resource: AppsResource, Path: "/:app_guid", Method: http.MethodPatch, Name: PatchApplicationRequest},
 	{Resource: AppsResource, Path: "/:app_guid/actions/apply_manifest", Method: http.MethodPost, Name: PostApplicationActionApplyManifest},
+	{Resource: AppsResource, Path: "/:app_guid/actions/restart", Method: http.MethodPost, Name: PostApplicationActionRestartRequest},
 	{Resource: AppsResource, Path: "/:app_guid/actions/start", Method: http.MethodPost, Name: PostApplicationActionStartRequest},
 	{Resource: AppsResource, Path: "/:app_guid/actions/stop", Method: http.MethodPost, Name: PostApplicationActionStopRequest},
 	{Resource: AppsResource, Path: "/:app_guid/droplets/current", Method: http.MethodGet, Name: GetApplicationDropletCurrentRequest},
 	{Resource: AppsResource, Path: "/:app_guid/env", Method: http.MethodGet, Name: GetApplicationEnvRequest},
 	{Resource: AppsResource, Path: "/:app_guid/environment_variables", Method: http.MethodPatch, Name: PatchApplicationEnvironmentVariablesRequest},
+	{Resource: AppsResource, Path: "/:app_guid/manifest", Method: http.MethodGet, Name: GetApplicationManifestRequest},
 	{Resource: AppsResource, Path: "/:app_guid/processes", Method: http.MethodGet, Name: GetApplicationProcessesRequest},
 	{Resource: AppsResource, Path: "/:app_guid/processes/:type", Method: http.MethodGet, Name: GetApplicationProcessRequest},
 	{Resource: AppsResource, Path: "/:app_guid/processes/:type/actions/scale", Method: http.MethodPost, Name: PostApplicationProcessActionScaleRequest},
@@ -86,10 +93,23 @@ var APIRoutes = []Route{
 	{Resource: AppsResource, Path: "/:app_guid/relationships/current_droplet", Method: http.MethodPatch, Name: PatchApplicationCurrentDropletRequest},
 	{Resource: AppsResource, Path: "/:app_guid/tasks", Method: http.MethodGet, Name: GetApplicationTasksRequest},
 	{Resource: AppsResource, Path: "/:app_guid/tasks", Method: http.MethodPost, Name: PostApplicationTasksRequest},
+	{Resource: BuildpacksResource, Path: "/", Method: http.MethodGet, Name: GetBuildpacksRequest},
+	{Resource: BuildpacksResource, Path: "/", Method: http.MethodPost, Name: PostBuildpackRequest},
+	{Resource: BuildpacksResource, Path: "/:buildpack_guid", Method: http.MethodPatch, Name: PatchBuildpackRequest},
+	{Resource: BuildpacksResource, Path: "/:buildpack_guid/upload", Method: http.MethodPost, Name: PostBuildpackBitsRequest},
+	{Resource: BuildpacksResource, Path: "/:buildpack_guid", Method: http.MethodDelete, Name: DeleteBuildpackRequest},
 	{Resource: BuildsResource, Path: "/", Method: http.MethodPost, Name: PostBuildRequest},
 	{Resource: BuildsResource, Path: "/:build_guid", Method: http.MethodGet, Name: GetBuildRequest},
+	{Resource: DeploymentsResource, Path: "/", Method: http.MethodGet, Name: GetDeploymentsRequest},
+	{Resource: DeploymentsResource, Path: "/", Method: http.MethodPost, Name: PostApplicationDeploymentRequest},
+	{Resource: DeploymentsResource, Path: "/:deployment_guid", Method: http.MethodGet, Name: GetDeploymentRequest},
+	{Resource: DeploymentsResource, Path: "/:deployment_guid/actions/cancel", Method: http.MethodPost, Name: PostApplicationDeploymentActionCancelRequest},
+	{Resource: DomainsResource, Path: "/", Method: http.MethodPost, Name: PostDomainRequest},
 	{Resource: DropletsResource, Path: "/", Method: http.MethodGet, Name: GetDropletsRequest},
 	{Resource: DropletsResource, Path: "/:droplet_guid", Method: http.MethodGet, Name: GetDropletRequest},
+	{Resource: FeatureFlagsResource, Path: "/:name", Method: http.MethodGet, Name: GetFeatureFlagRequest},
+	{Resource: FeatureFlagsResource, Path: "/:name", Method: http.MethodPatch, Name: PatchFeatureFlagRequest},
+	{Resource: FeatureFlagsResource, Path: "/", Method: http.MethodGet, Name: GetFeatureFlagsRequest},
 	{Resource: IsolationSegmentsResource, Path: "/", Method: http.MethodGet, Name: GetIsolationSegmentsRequest},
 	{Resource: IsolationSegmentsResource, Path: "/", Method: http.MethodPost, Name: PostIsolationSegmentsRequest},
 	{Resource: IsolationSegmentsResource, Path: "/:isolation_segment_guid", Method: http.MethodDelete, Name: DeleteIsolationSegmentRequest},
@@ -105,11 +125,14 @@ var APIRoutes = []Route{
 	{Resource: PackagesResource, Path: "/:package_guid", Method: http.MethodGet, Name: GetPackageRequest},
 	{Resource: ProcessesResource, Path: "/:process_guid", Method: http.MethodPatch, Name: PatchProcessRequest},
 	{Resource: ProcessesResource, Path: "/:process_guid/stats", Method: http.MethodGet, Name: GetProcessStatsRequest},
+	{Resource: ResourceMatches, Path: "/", Method: http.MethodPost, Name: PostResourceMatchesRequest},
 	{Resource: ServiceInstancesResource, Path: "/", Method: http.MethodGet, Name: GetServiceInstancesRequest},
 	{Resource: ServiceInstancesResource, Path: "/:service_instance_guid/relationships/shared_spaces", Method: http.MethodPost, Name: PostServiceInstanceRelationshipsSharedSpacesRequest},
 	{Resource: ServiceInstancesResource, Path: "/:service_instance_guid/relationships/shared_spaces/:space_guid", Method: http.MethodDelete, Name: DeleteServiceInstanceRelationshipsSharedSpaceRequest},
 	{Resource: SpacesResource, Path: "/", Method: http.MethodGet, Name: GetSpacesRequest},
 	{Resource: SpacesResource, Path: "/:space_guid/relationships/isolation_segment", Method: http.MethodGet, Name: GetSpaceRelationshipIsolationSegmentRequest},
 	{Resource: SpacesResource, Path: "/:space_guid/relationships/isolation_segment", Method: http.MethodPatch, Name: PatchSpaceRelationshipIsolationSegmentRequest},
+	{Resource: SpacesResource, Path: "/:space_guid/actions/apply_manifest", Method: http.MethodPost, Name: PostSpaceActionApplyManifestRequest},
+	{Resource: StacksResource, Path: "/", Method: http.MethodGet, Name: GetStacksRequest},
 	{Resource: TasksResource, Path: "/:task_guid/cancel", Method: http.MethodPut, Name: PutTaskCancelRequest},
 }

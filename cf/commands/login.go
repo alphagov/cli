@@ -4,9 +4,12 @@ import (
 	"errors"
 	"strconv"
 
+	"code.cloudfoundry.org/cli/api/cloudcontroller/ccversion"
 	"code.cloudfoundry.org/cli/cf/commandregistry"
 	"code.cloudfoundry.org/cli/cf/flags"
 	. "code.cloudfoundry.org/cli/cf/i18n"
+	"code.cloudfoundry.org/cli/command"
+	"code.cloudfoundry.org/cli/command/translatableerror"
 
 	"code.cloudfoundry.org/cli/cf/api/authentication"
 	"code.cloudfoundry.org/cli/cf/api/organizations"
@@ -91,6 +94,15 @@ func (cmd *Login) Execute(c flags.FlagContext) error {
 	err := api.setAPIEndpoint(endpoint, skipSSL, cmd.MetaData().Name)
 	if err != nil {
 		return err
+	}
+
+	err = command.MinimumCCAPIVersionCheck(cmd.config.APIVersion(), ccversion.MinSupportedV2ClientVersion)
+	if err != nil {
+		if _, ok := err.(translatableerror.MinimumCFAPIVersionNotMetError); ok {
+			cmd.ui.Warn("Your API version is no longer supported. Upgrade to a newer version of the API.")
+		} else {
+			return err
+		}
 	}
 
 	defer func() {
@@ -214,7 +226,7 @@ func (cmd Login) authenticate(c flags.FlagContext) error {
 
 	for key, prompt := range prompts {
 		if prompt.Type == coreconfig.AuthPromptTypePassword {
-			if key == "passcode" {
+			if key == "passcode" || key == "password" {
 				continue
 			}
 
@@ -227,13 +239,19 @@ func (cmd Login) authenticate(c flags.FlagContext) error {
 	}
 
 	for i := 0; i < maxLoginTries; i++ {
-		for _, key := range passwordKeys {
-			if key == "password" && passwordFlagValue != "" {
-				credentials[key] = passwordFlagValue
+
+		// ensure that password gets prompted before other codes (eg. mfa code)
+		if passPrompt, ok := prompts["password"]; ok {
+			if passwordFlagValue != "" {
+				credentials["password"] = passwordFlagValue
 				passwordFlagValue = ""
 			} else {
-				credentials[key] = cmd.ui.AskForPassword(prompts[key].DisplayName)
+				credentials["password"] = cmd.ui.AskForPassword(passPrompt.DisplayName)
 			}
+		}
+
+		for _, key := range passwordKeys {
+			credentials[key] = cmd.ui.AskForPassword(prompts[key].DisplayName)
 		}
 
 		credentialsCopy := make(map[string]string, len(credentials))

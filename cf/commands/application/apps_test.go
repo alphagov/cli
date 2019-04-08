@@ -8,10 +8,10 @@ import (
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
 	"code.cloudfoundry.org/cli/cf/trace/tracefakes"
+	testcmd "code.cloudfoundry.org/cli/cf/util/testhelpers/commands"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 	"code.cloudfoundry.org/cli/plugin/models"
-	testcmd "code.cloudfoundry.org/cli/util/testhelpers/commands"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -19,7 +19,7 @@ import (
 
 	"code.cloudfoundry.org/cli/cf/commands/application"
 	"code.cloudfoundry.org/cli/cf/flags"
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 )
 
 var _ = Describe("list-apps command", func() {
@@ -54,7 +54,7 @@ var _ = Describe("list-apps command", func() {
 					Name:                   "cfapps.io",
 					Shared:                 true,
 					OwningOrganizationGUID: "org-123",
-					GUID: "domain-guid",
+					GUID:                   "domain-guid",
 				},
 			},
 			{
@@ -79,7 +79,6 @@ var _ = Describe("list-apps command", func() {
 		app.Memory = 512
 		app.DiskQuota = 1024
 		app.Routes = app1Routes
-		app.AppPorts = []int{8080, 9090}
 
 		app2 := models.Application{}
 		app2.Name = "Application-2"
@@ -175,8 +174,6 @@ var _ = Describe("list-apps command", func() {
 			Expect(pluginAppModels[0].RunningInstances).To(Equal(1))
 			Expect(pluginAppModels[0].Memory).To(Equal(int64(512)))
 			Expect(pluginAppModels[0].DiskQuota).To(Equal(int64(1024)))
-			// Commented to hide app-ports for release #117189491
-			// Expect(pluginAppModels[0].AppPorts).To(Equal([]int{8080, 9090}))
 			Expect(pluginAppModels[0].Routes[0].Host).To(Equal("app1"))
 			Expect(pluginAppModels[0].Routes[1].Host).To(Equal("app1"))
 			Expect(pluginAppModels[0].Routes[0].Domain.Name).To(Equal("cfapps.io"))

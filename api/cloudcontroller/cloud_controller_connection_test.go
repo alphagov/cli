@@ -48,11 +48,11 @@ var _ = Describe("Cloud Controller Connection", func() {
 				request = &Request{Request: req}
 			})
 
-			Context("when passed a response with a result set", func() {
+			When("passed a response with a result set", func() {
 				It("unmarshals the data into a struct", func() {
 					var body DummyResponse
 					response := Response{
-						Result: &body,
+						DecodeJSONResponseInto: &body,
 					}
 
 					err := connection.Make(request, &response)
@@ -65,7 +65,7 @@ var _ = Describe("Cloud Controller Connection", func() {
 				It("keeps numbers unmarshalled to interfaces as interfaces", func() {
 					var body DummyResponse
 					response := Response{
-						Result: &body,
+						DecodeJSONResponseInto: &body,
 					}
 
 					err := connection.Make(request, &response)
@@ -74,12 +74,12 @@ var _ = Describe("Cloud Controller Connection", func() {
 				})
 			})
 
-			Context("when passed an empty response", func() {
+			When("passed an empty response", func() {
 				It("skips the unmarshalling step", func() {
 					var response Response
 					err := connection.Make(request, &response)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(response.Result).To(BeNil())
+					Expect(response.DecodeJSONResponseInto).To(BeNil())
 				})
 			})
 		})
@@ -137,12 +137,12 @@ var _ = Describe("Cloud Controller Connection", func() {
 			})
 
 			Describe("X-Cf-Warnings", func() {
-				Context("when there are warnings", func() {
+				When("there are warnings", func() {
 					BeforeEach(func() {
 						server.AppendHandlers(
 							CombineHandlers(
 								VerifyRequest(http.MethodGet, "/v2/foo"),
-								RespondWith(http.StatusOK, "{}", http.Header{"X-Cf-Warnings": {"42,+Ed+McMann,+the+1942+doggers"}}),
+								RespondWith(http.StatusOK, "{}", http.Header{"X-Cf-Warnings": {"42,+Ed+McMann,+the+1942+doggers,a%2Cb"}}),
 							),
 						)
 					})
@@ -160,14 +160,15 @@ var _ = Describe("Cloud Controller Connection", func() {
 
 						warnings := response.Warnings
 						Expect(warnings).ToNot(BeNil())
-						Expect(warnings).To(HaveLen(3))
+						Expect(warnings).To(HaveLen(4))
 						Expect(warnings).To(ContainElement("42"))
 						Expect(warnings).To(ContainElement("Ed McMann"))
 						Expect(warnings).To(ContainElement("the 1942 doggers"))
+						Expect(warnings).To(ContainElement("a,b"))
 					})
 				})
 
-				Context("when there are no warnings", func() {
+				When("there are no warnings", func() {
 					BeforeEach(func() {
 						server.AppendHandlers(
 							CombineHandlers(
@@ -194,7 +195,7 @@ var _ = Describe("Cloud Controller Connection", func() {
 		})
 
 		Describe("Errors", func() {
-			Context("when the server does not exist", func() {
+			When("the server does not exist", func() {
 				BeforeEach(func() {
 					connection = NewConnection(Config{})
 				})
@@ -214,7 +215,7 @@ var _ = Describe("Cloud Controller Connection", func() {
 				})
 			})
 
-			Context("when the server does not have a verified certificate", func() {
+			When("the server does not have a verified certificate", func() {
 				Context("skipSSLValidation is false", func() {
 					BeforeEach(func() {
 						server.AppendHandlers(
@@ -238,7 +239,7 @@ var _ = Describe("Cloud Controller Connection", func() {
 				})
 			})
 
-			Context("when the server's certificate does not match the hostname", func() {
+			When("the server's certificate does not match the hostname", func() {
 				Context("skipSSLValidation is false", func() {
 					BeforeEach(func() {
 						if runtime.GOOS == "windows" {
@@ -253,9 +254,9 @@ var _ = Describe("Cloud Controller Connection", func() {
 						connection = NewConnection(Config{})
 					})
 
-					// loopback.cli.ci.cf-app.com is a custom DNS record setup to point to 127.0.0.1
+					// loopback.cli.fun is a custom DNS record setup to point to 127.0.0.1
 					It("returns a SSLValidationHostnameError", func() {
-						altHostURL := strings.Replace(server.URL(), "127.0.0.1", "loopback.cli.ci.cf-app.com", -1)
+						altHostURL := strings.Replace(server.URL(), "127.0.0.1", "loopback.cli.fun", -1)
 						req, err := http.NewRequest(http.MethodGet, altHostURL, nil)
 						Expect(err).ToNot(HaveOccurred())
 						request := &Request{Request: req}
@@ -263,7 +264,7 @@ var _ = Describe("Cloud Controller Connection", func() {
 						var response Response
 						err = connection.Make(request, &response)
 						Expect(err).To(MatchError(ccerror.SSLValidationHostnameError{
-							Message: "x509: certificate is valid for example.com, not loopback.cli.ci.cf-app.com",
+							Message: "x509: certificate is valid for example.com, not loopback.cli.fun",
 						}))
 					})
 				})

@@ -214,7 +214,7 @@ func (cmd HelpCommand) displayCommonCommands() {
 	cmd.UI.DisplayNonWrappingTable(commonCommandsIndent, cmd.globalOptionsTableData(), 25)
 	cmd.UI.DisplayNewline()
 
-	cmd.UI.DisplayText("Use 'cf help -a' to see all commands.")
+	cmd.UI.DisplayTextWithFlavor("TIP: Use '{{.FullHelpCommand}}' to see all commands.", map[string]interface{}{"FullHelpCommand": "cf help -a"})
 }
 
 func (cmd HelpCommand) displayCommand() error {
@@ -259,15 +259,7 @@ func (cmd HelpCommand) displayCommand() error {
 		cmd.UI.DisplayText("OPTIONS:")
 		nameWidth := internal.LongestFlagWidth(cmdInfo.Flags) + 6
 		for _, flag := range cmdInfo.Flags {
-			var name string
-			if flag.Short != "" && flag.Long != "" {
-				name = fmt.Sprintf("--%s, -%s", flag.Long, flag.Short)
-			} else if flag.Short != "" {
-				name = "-" + flag.Short
-			} else {
-				name = "--" + flag.Long
-			}
-
+			name := internal.FlagWithHyphens(flag)
 			defaultText := ""
 			if flag.Default != "" {
 				defaultText = cmd.UI.TranslateText(" (Default: {{.DefaultValue}})", map[string]interface{}{
@@ -314,7 +306,8 @@ func (cmd HelpCommand) environmentalVariablesTableData() [][]string {
 		{"CF_PLUGIN_HOME=path/to/dir/", cmd.UI.TranslateText("Override path to default plugin config directory")},
 		{"CF_TRACE=true", cmd.UI.TranslateText("Print API request diagnostics to stdout")},
 		{"CF_TRACE=path/to/trace.log", cmd.UI.TranslateText("Append API request diagnostics to a log file")},
-		{"https_proxy=proxy.example.com:8080", cmd.UI.TranslateText("Enable HTTP proxying for API requests")},
+		{"all_proxy=proxy.example.com:8080", cmd.UI.TranslateText("Specify a proxy server to enable proxying for all requests")},
+		{"https_proxy=proxy.example.com:8080", cmd.UI.TranslateText("Enable proxying for HTTP requests")},
 	}
 }
 

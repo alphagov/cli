@@ -5,13 +5,15 @@ import (
 
 	"code.cloudfoundry.org/cli/actor/actionerror"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
+	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/constant"
 )
 
 type ProcessHealthCheck struct {
-	ProcessType     string
-	HealthCheckType string
-	Endpoint        string
+	ProcessType       string
+	HealthCheckType   constant.HealthCheckType
+	Endpoint          string
+	InvocationTimeout int64
 }
 
 type ProcessHealthChecks []ProcessHealthCheck
@@ -57,9 +59,10 @@ func (actor Actor) GetApplicationProcessHealthChecksByNameAndSpace(appName strin
 	var processHealthChecks ProcessHealthChecks
 	for _, ccv3Process := range ccv3Processes {
 		processHealthCheck := ProcessHealthCheck{
-			ProcessType:     ccv3Process.Type,
-			HealthCheckType: ccv3Process.HealthCheckType,
-			Endpoint:        ccv3Process.HealthCheckEndpoint,
+			ProcessType:       ccv3Process.Type,
+			HealthCheckType:   ccv3Process.HealthCheckType,
+			Endpoint:          ccv3Process.HealthCheckEndpoint,
+			InvocationTimeout: ccv3Process.HealthCheckInvocationTimeout,
 		}
 		processHealthChecks = append(processHealthChecks, processHealthCheck)
 	}
@@ -69,8 +72,16 @@ func (actor Actor) GetApplicationProcessHealthChecksByNameAndSpace(appName strin
 	return processHealthChecks, allWarnings, nil
 }
 
-func (actor Actor) SetApplicationProcessHealthCheckTypeByNameAndSpace(appName string, spaceGUID string, healthCheckType string, httpEndpoint string, processType string) (Application, Warnings, error) {
-	if healthCheckType != "http" {
+func (actor Actor) SetApplicationProcessHealthCheckTypeByNameAndSpace(
+	appName string,
+	spaceGUID string,
+	healthCheckType constant.HealthCheckType,
+	httpEndpoint string,
+	processType string,
+	invocationTimeout int64,
+) (Application, Warnings, error) {
+
+	if healthCheckType != constant.HTTP {
 		if httpEndpoint == "/" {
 			httpEndpoint = ""
 		} else {
@@ -92,12 +103,12 @@ func (actor Actor) SetApplicationProcessHealthCheckTypeByNameAndSpace(appName st
 		return Application{}, allWarnings, err
 	}
 
-	_, warnings, err = actor.CloudControllerClient.PatchApplicationProcessHealthCheck(
-		process.GUID,
-		healthCheckType,
-		httpEndpoint,
-	)
-	allWarnings = append(allWarnings, Warnings(warnings)...)
+	process.HealthCheckType = healthCheckType
+	process.HealthCheckEndpoint = httpEndpoint
+	process.HealthCheckInvocationTimeout = invocationTimeout
+
+	_, updateWarnings, err := actor.CloudControllerClient.UpdateProcess(ccv3.Process(process))
+	allWarnings = append(allWarnings, Warnings(updateWarnings)...)
 	if err != nil {
 		return Application{}, allWarnings, err
 	}

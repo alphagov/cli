@@ -83,7 +83,7 @@ var _ = Describe("Target", func() {
 			)
 		})
 
-		Context("when client has wrappers", func() {
+		When("client has wrappers", func() {
 			var fakeWrapper1 *ccv3fakes.FakeConnectionWrapper
 			var fakeWrapper2 *ccv3fakes.FakeConnectionWrapper
 
@@ -94,7 +94,7 @@ var _ = Describe("Target", func() {
 				fakeWrapper2.WrapReturns(fakeWrapper2)
 
 				fakeWrapper2.MakeStub = func(request *cloudcontroller.Request, passedResponse *cloudcontroller.Response) error {
-					apiInfo, ok := passedResponse.Result.(*Info)
+					apiInfo, ok := passedResponse.DecodeJSONResponseInto.(*Info)
 					if ok { // Only caring about the first time Make is called, ignore all others
 						apiInfo.Links.CCV3.HREF = server.URL() + "/v3"
 					}
@@ -121,9 +121,9 @@ var _ = Describe("Target", func() {
 			})
 		})
 
-		Context("when passed a valid API URL", func() {
-			Context("when the server has unverified SSL", func() {
-				Context("when setting the skip ssl flag", func() {
+		When("passed a valid API URL", func() {
+			When("the server has unverified SSL", func() {
+				When("setting the skip ssl flag", func() {
 					It("sets all the endpoints on the client and returns all warnings", func() {
 						warnings, err := client.TargetCF(TargetSettings{
 							SkipSSLValidation: true,
@@ -139,7 +139,7 @@ var _ = Describe("Target", func() {
 			})
 		})
 
-		Context("when the cloud controller encounters an error", func() {
+		When("the cloud controller encounters an error", func() {
 			BeforeEach(func() {
 				server.SetHandler(1,
 					CombineHandlers(

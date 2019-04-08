@@ -23,8 +23,7 @@ var _ = Describe("Routes", func() {
 	)
 
 	BeforeEach(func() {
-		fakeV2Actor = new(pushactionfakes.FakeV2Actor)
-		actor = NewActor(fakeV2Actor, nil, nil)
+		actor, fakeV2Actor, _, _ = getTestPushActor()
 
 		fakeRandomWordGenerator = new(pushactionfakes.FakeRandomWordGenerator)
 		actor.WordGenerator = fakeRandomWordGenerator
@@ -52,7 +51,7 @@ var _ = Describe("Routes", func() {
 			returnedConfig, warnings, executeErr = actor.UnmapRoutes(config)
 		})
 
-		Context("when there are routes on the application", func() {
+		When("there are routes on the application", func() {
 			BeforeEach(func() {
 				config.CurrentRoutes = []v2action.Route{
 					{GUID: "some-route-guid-1", Host: "some-route-1", Domain: v2action.Domain{Name: "some-domain.com"}},
@@ -60,7 +59,7 @@ var _ = Describe("Routes", func() {
 				}
 			})
 
-			Context("when the unmapping is successful", func() {
+			When("the unmapping is successful", func() {
 				BeforeEach(func() {
 					fakeV2Actor.UnmapRouteFromApplicationReturns(v2action.Warnings{"unmap-route-warning"}, nil)
 				})
@@ -83,7 +82,7 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when the mapping errors", func() {
+			When("the mapping errors", func() {
 				var expectedErr error
 				BeforeEach(func() {
 					expectedErr = errors.New("oh my")
@@ -121,7 +120,7 @@ var _ = Describe("Routes", func() {
 			returnedConfig, boundRoutes, warnings, executeErr = actor.MapRoutes(config)
 		})
 
-		Context("when routes need to be bound to the application", func() {
+		When("routes need to be bound to the application", func() {
 			BeforeEach(func() {
 				config.CurrentRoutes = []v2action.Route{
 					{GUID: "some-route-guid-2", Host: "some-route-2"},
@@ -133,7 +132,7 @@ var _ = Describe("Routes", func() {
 				}
 			})
 
-			Context("when the mapping is successful", func() {
+			When("the mapping is successful", func() {
 				BeforeEach(func() {
 					fakeV2Actor.MapRouteToApplicationReturns(v2action.Warnings{"map-route-warning"}, nil)
 				})
@@ -157,8 +156,8 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when the mapping errors", func() {
-				Context("when the route is bound in another space", func() {
+			When("the mapping errors", func() {
+				When("the route is bound in another space", func() {
 					BeforeEach(func() {
 						fakeV2Actor.MapRouteToApplicationReturns(v2action.Warnings{"map-route-warning"}, actionerror.RouteInDifferentSpaceError{})
 					})
@@ -184,7 +183,7 @@ var _ = Describe("Routes", func() {
 			})
 		})
 
-		Context("when no routes need to be bound", func() {
+		When("no routes need to be bound", func() {
 			It("returns false", func() {
 				Expect(executeErr).ToNot(HaveOccurred())
 			})
@@ -221,7 +220,7 @@ var _ = Describe("Routes", func() {
 			calculatedRoutes, warnings, executeErr = actor.CalculateRoutes(routes, orgGUID, spaceGUID, existingRoutes)
 		})
 
-		Context("when there are no known routes", func() {
+		When("there are no known routes", func() {
 			BeforeEach(func() {
 				existingRoutes = []v2action.Route{{
 					GUID: "some-route-5",
@@ -234,7 +233,7 @@ var _ = Describe("Routes", func() {
 				}}
 			})
 
-			Context("when a route looking up the domains is succuessful", func() {
+			When("a route looking up the domains is succuessful", func() {
 				BeforeEach(func() {
 					fakeV2Actor.GetDomainsByNameAndOrganizationReturns([]v2action.Domain{
 						{GUID: "domain-guid-1", Name: "a.com"},
@@ -244,7 +243,7 @@ var _ = Describe("Routes", func() {
 					}, v2action.Warnings{"domain-warnings-1", "domains-warnings-2"}, nil)
 				})
 
-				Context("when the route is invalid", func() {
+				When("the route is invalid", func() {
 					BeforeEach(func() {
 						routes = []string{"a.com", "b.a.com", "c.b.a.com:1234"}
 					})
@@ -255,7 +254,7 @@ var _ = Describe("Routes", func() {
 					})
 				})
 
-				Context("when the route existance check is successful", func() {
+				When("the route existance check is successful", func() {
 					BeforeEach(func() {
 						fakeV2Actor.FindRouteBoundToSpaceWithSettingsReturns(v2action.Route{}, v2action.Warnings{"find-route-warning"}, actionerror.RouteNotFoundError{})
 						fakeV2Actor.FindRouteBoundToSpaceWithSettingsReturnsOnCall(3, v2action.Route{
@@ -358,7 +357,7 @@ var _ = Describe("Routes", func() {
 					})
 				})
 
-				Context("when the route existance check fails", func() {
+				When("the route existance check fails", func() {
 					var expectedErr error
 
 					BeforeEach(func() {
@@ -372,7 +371,7 @@ var _ = Describe("Routes", func() {
 					})
 				})
 
-				Context("when one of the domains does not exist", func() {
+				When("one of the domains does not exist", func() {
 					BeforeEach(func() {
 						fakeV2Actor.GetDomainsByNameAndOrganizationReturns(nil, v2action.Warnings{"domain-warnings-1", "domains-warnings-2"}, nil)
 					})
@@ -384,7 +383,7 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when looking up a domain returns an error", func() {
+			When("looking up a domain returns an error", func() {
 				var expectedErr error
 
 				BeforeEach(func() {
@@ -399,7 +398,7 @@ var _ = Describe("Routes", func() {
 			})
 		})
 
-		Context("when there are known routes", func() {
+		When("there are known routes", func() {
 			BeforeEach(func() {
 				existingRoutes = []v2action.Route{{
 					GUID: "route-guid-4",
@@ -500,89 +499,119 @@ var _ = Describe("Routes", func() {
 				v2action.Application{Name: "some-app", GUID: "some-app-guid"})
 		})
 
-		Context("when getting organization domains errors", func() {
+		When("getting the application routes errors", func() {
 			BeforeEach(func() {
-				fakeV2Actor.GetOrganizationDomainsReturns(
-					[]v2action.Domain{},
-					v2action.Warnings{"domain-warning"},
-					errors.New("some-error"))
+				fakeV2Actor.GetApplicationRoutesReturns(
+					[]v2action.Route{},
+					v2action.Warnings{"route-warning"},
+					errors.New("some-error"),
+				)
 			})
 
 			It("returns the error", func() {
 				Expect(executeErr).To(MatchError("some-error"))
-				Expect(warnings).To(ConsistOf("domain-warning"))
+				Expect(warnings).To(ConsistOf("route-warning"))
 			})
 		})
 
-		Context("when getting organization domains succeeds", func() {
-			BeforeEach(func() {
-				fakeV2Actor.GetOrganizationDomainsReturns(
-					[]v2action.Domain{
-						{
-							GUID: "some-domain-guid",
-							Name: "some-domain",
-						},
-					},
-					v2action.Warnings{"domain-warning"},
-					nil,
-				)
-			})
-
-			Context("when getting the application routes errors", func() {
+		When("getting the application routes succeeds", func() {
+			// TODO: do we need this context
+			When("A non default route is already bound to the app", func() {
 				BeforeEach(func() {
 					fakeV2Actor.GetApplicationRoutesReturns(
-						[]v2action.Route{},
+						[]v2action.Route{
+							{
+								Host: "some-app-sepcial",
+								Domain: v2action.Domain{
+									GUID: "some-domain-guid",
+									Name: "some-domain",
+								},
+								GUID:      "some-route-guid",
+								SpaceGUID: "some-space-guid",
+							},
+						},
 						v2action.Warnings{"route-warning"},
-						errors.New("some-error"),
+						nil,
 					)
 				})
 
-				It("returns the error", func() {
-					Expect(executeErr).To(MatchError("some-error"))
-					Expect(warnings).To(ConsistOf("domain-warning", "route-warning"))
+				It("returns any warnings", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+					Expect(warnings).To(ConsistOf("route-warning"))
+
+					Expect(fakeV2Actor.GetApplicationRoutesCallCount()).To(Equal(1), "Expected GetApplicationRoutes to be called once, but it was not")
+					appGUID := fakeV2Actor.GetApplicationRoutesArgsForCall(0)
+					Expect(appGUID).To(Equal("some-app-guid"))
+
+					Expect(fakeV2Actor.GetOrganizationDomainsCallCount()).To(Equal(0), "Expected GetOrganizationDomains to be called once, but it was not")
+					Expect(fakeV2Actor.CreateRouteCallCount()).To(Equal(0), "Expected CreateRoute to not be called but it was")
+					Expect(fakeV2Actor.MapRouteToApplicationCallCount()).To(Equal(0), "Expected MapRouteToApplication to not be called but it was")
 				})
 			})
 
-			Context("when getting the application routes succeeds", func() {
-				// TODO: do we need this context
-				Context("when the route is already bound to the app", func() {
+			When("The default route is already bound to the app", func() {
+				BeforeEach(func() {
+					fakeV2Actor.GetApplicationRoutesReturns(
+						[]v2action.Route{
+							{
+								Host: "some-app",
+								Domain: v2action.Domain{
+									GUID: "some-domain-guid",
+									Name: "some-domain",
+								},
+								GUID:      "some-route-guid",
+								SpaceGUID: "some-space-guid",
+							},
+						},
+						v2action.Warnings{"route-warning"},
+						nil,
+					)
+				})
+
+				It("returns any warnings", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+					Expect(warnings).To(ConsistOf("route-warning"))
+
+					Expect(fakeV2Actor.GetApplicationRoutesCallCount()).To(Equal(1), "Expected GetApplicationRoutes to be called once, but it was not")
+					appGUID := fakeV2Actor.GetApplicationRoutesArgsForCall(0)
+					Expect(appGUID).To(Equal("some-app-guid"))
+
+					Expect(fakeV2Actor.CreateRouteCallCount()).To(Equal(0), "Expected CreateRoute to not be called but it was")
+					Expect(fakeV2Actor.MapRouteToApplicationCallCount()).To(Equal(0), "Expected MapRouteToApplication to not be called but it was")
+					Expect(fakeV2Actor.GetOrganizationDomainsCallCount()).To(Equal(0), "Expected GetOrganizationDomains to be called once, but it was not")
+				})
+			})
+
+			When("A route isn't bound to the app", func() {
+				When("getting organization domains errors", func() {
 					BeforeEach(func() {
-						fakeV2Actor.GetApplicationRoutesReturns(
-							[]v2action.Route{
+						fakeV2Actor.GetOrganizationDomainsReturns(
+							[]v2action.Domain{},
+							v2action.Warnings{"domain-warning"},
+							errors.New("some-error"))
+					})
+
+					It("returns the error", func() {
+						Expect(executeErr).To(MatchError("some-error"))
+						Expect(warnings).To(ConsistOf("domain-warning"))
+					})
+				})
+
+				When("getting organization domains succeeds", func() {
+					BeforeEach(func() {
+						fakeV2Actor.GetOrganizationDomainsReturns(
+							[]v2action.Domain{
 								{
-									Host: "some-app",
-									Domain: v2action.Domain{
-										GUID: "some-domain-guid",
-										Name: "some-domain",
-									},
-									GUID:      "some-route-guid",
-									SpaceGUID: "some-space-guid",
+									GUID: "some-domain-guid",
+									Name: "some-domain",
 								},
 							},
-							v2action.Warnings{"route-warning"},
+							v2action.Warnings{"domain-warning"},
 							nil,
 						)
 					})
 
-					It("returns any warnings", func() {
-						Expect(executeErr).ToNot(HaveOccurred())
-						Expect(warnings).To(ConsistOf("domain-warning", "route-warning"))
-
-						Expect(fakeV2Actor.GetOrganizationDomainsCallCount()).To(Equal(1), "Expected GetOrganizationDomains to be called once, but it was not")
-						orgGUID := fakeV2Actor.GetOrganizationDomainsArgsForCall(0)
-						Expect(orgGUID).To(Equal("some-org-guid"))
-
-						Expect(fakeV2Actor.GetApplicationRoutesCallCount()).To(Equal(1), "Expected GetApplicationRoutes to be called once, but it was not")
-						appGUID := fakeV2Actor.GetApplicationRoutesArgsForCall(0)
-						Expect(appGUID).To(Equal("some-app-guid"))
-
-						Expect(fakeV2Actor.CreateRouteCallCount()).To(Equal(0), "Expected CreateRoute to not be called but it was")
-						Expect(fakeV2Actor.MapRouteToApplicationCallCount()).To(Equal(0), "Expected MapRouteToApplication to not be called but it was")
-					})
-				})
-
-				Context("when the route isn't bound to the app", func() {
-					Context("when finding route in space errors", func() {
+					When("finding route in space errors", func() {
 						BeforeEach(func() {
 							fakeV2Actor.FindRouteBoundToSpaceWithSettingsReturns(
 								v2action.Route{},
@@ -597,7 +626,7 @@ var _ = Describe("Routes", func() {
 						})
 					})
 
-					Context("when the route exists", func() {
+					When("the route exists", func() {
 						BeforeEach(func() {
 							fakeV2Actor.FindRouteBoundToSpaceWithSettingsReturns(
 								v2action.Route{
@@ -614,7 +643,7 @@ var _ = Describe("Routes", func() {
 							)
 						})
 
-						Context("when the map command returns an error", func() {
+						When("the map command returns an error", func() {
 							BeforeEach(func() {
 								fakeV2Actor.MapRouteToApplicationReturns(
 									v2action.Warnings{"map-warning"},
@@ -628,7 +657,7 @@ var _ = Describe("Routes", func() {
 							})
 						})
 
-						Context("when the map command succeeds", func() {
+						When("the map command succeeds", func() {
 							BeforeEach(func() {
 								fakeV2Actor.MapRouteToApplicationReturns(
 									v2action.Warnings{"map-warning"},
@@ -659,7 +688,7 @@ var _ = Describe("Routes", func() {
 						})
 					})
 
-					Context("when the route does not exist", func() {
+					When("the route does not exist", func() {
 						BeforeEach(func() {
 							fakeV2Actor.FindRouteBoundToSpaceWithSettingsReturns(
 								v2action.Route{},
@@ -668,7 +697,7 @@ var _ = Describe("Routes", func() {
 							)
 						})
 
-						Context("when the create route command errors", func() {
+						When("the create route command errors", func() {
 							BeforeEach(func() {
 								fakeV2Actor.CreateRouteReturns(
 									v2action.Route{},
@@ -683,7 +712,7 @@ var _ = Describe("Routes", func() {
 							})
 						})
 
-						Context("when the create route command succeeds", func() {
+						When("the create route command succeeds", func() {
 							BeforeEach(func() {
 								fakeV2Actor.CreateRouteReturns(
 									v2action.Route{
@@ -700,7 +729,7 @@ var _ = Describe("Routes", func() {
 								)
 							})
 
-							Context("when the map command errors", func() {
+							When("the map command errors", func() {
 								BeforeEach(func() {
 									fakeV2Actor.MapRouteToApplicationReturns(
 										v2action.Warnings{"map-warning"},
@@ -713,7 +742,7 @@ var _ = Describe("Routes", func() {
 									Expect(warnings).To(ConsistOf("domain-warning", "route-warning", "route-create-warning", "map-warning"))
 								})
 							})
-							Context("when the map command succeeds", func() {
+							When("the map command succeeds", func() {
 
 								BeforeEach(func() {
 									fakeV2Actor.MapRouteToApplicationReturns(
@@ -790,7 +819,7 @@ var _ = Describe("Routes", func() {
 				}
 			})
 
-			Context("when the creation is successful", func() {
+			When("the creation is successful", func() {
 				BeforeEach(func() {
 					fakeV2Actor.CreateRouteReturnsOnCall(0, v2action.Route{GUID: "some-route-guid-1", Host: "some-route-1"}, v2action.Warnings{"create-route-warning"}, nil)
 					fakeV2Actor.CreateRouteReturnsOnCall(1, v2action.Route{GUID: "some-route-guid-3", Host: "some-route-3"}, v2action.Warnings{"create-route-warning"}, nil)
@@ -824,7 +853,7 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when the creation errors", func() {
+			When("the creation errors", func() {
 				var expectedErr error
 
 				BeforeEach(func() {
@@ -842,7 +871,7 @@ var _ = Describe("Routes", func() {
 			})
 		})
 
-		Context("when no routes are created", func() {
+		When("no routes are created", func() {
 			BeforeEach(func() {
 				config.DesiredRoutes = []v2action.Route{
 					{GUID: "some-route-guid-1", Host: "some-route-1"},
@@ -883,7 +912,7 @@ var _ = Describe("Routes", func() {
 			randomRoute, warnings, executeErr = actor.GenerateRandomRoute(manifestApp, spaceGUID, orgGUID)
 		})
 
-		Context("when a domain is specified", func() {
+		When("a domain is specified", func() {
 			BeforeEach(func() {
 				manifestApp.Domain = "some-domain"
 				domain.Name = "some-domain"
@@ -913,8 +942,8 @@ var _ = Describe("Routes", func() {
 			})
 		})
 
-		Context("when no domain is specified", func() {
-			Context("when the default domain is a tcp domain", func() {
+		When("no domain is specified", func() {
+			When("the default domain is a tcp domain", func() {
 				BeforeEach(func() {
 					domain.RouterGroupType = constant.TCPRouterGroup
 					fakeV2Actor.GetOrganizationDomainsReturns(
@@ -937,7 +966,7 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when the default domain is an http domain", func() {
+			When("the default domain is an http domain", func() {
 				BeforeEach(func() {
 					domain.RouterGroupType = constant.HTTPRouterGroup
 					fakeV2Actor.GetOrganizationDomainsReturns(
@@ -949,7 +978,7 @@ var _ = Describe("Routes", func() {
 					fakeRandomWordGenerator.RandomNounReturns("apple")
 				})
 
-				Context("when the app name is partially sanitized", func() {
+				When("the app name is partially sanitized", func() {
 					BeforeEach(func() {
 						manifestApp.Name = "a--b"
 					})
@@ -965,7 +994,7 @@ var _ = Describe("Routes", func() {
 					})
 				})
 
-				Context("when the app name is fully sanitized", func() {
+				When("the app name is fully sanitized", func() {
 					BeforeEach(func() {
 						manifestApp.Name = "@@@"
 					})
@@ -982,7 +1011,7 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when the default domain lookup fails", func() {
+			When("the default domain lookup fails", func() {
 				BeforeEach(func() {
 					fakeV2Actor.GetOrganizationDomainsReturns(
 						[]v2action.Domain{domain},
@@ -1035,7 +1064,7 @@ var _ = Describe("Routes", func() {
 				providedManifest.Domain = "shared-domain.com"
 			})
 
-			Context("when the provided domain exists", func() {
+			When("the provided domain exists", func() {
 				BeforeEach(func() {
 					domain.Type = constant.SharedDomain
 
@@ -1043,7 +1072,7 @@ var _ = Describe("Routes", func() {
 					fakeV2Actor.FindRouteBoundToSpaceWithSettingsReturns(v2action.Route{}, v2action.Warnings{"get-route-warnings"}, actionerror.RouteNotFoundError{})
 				})
 
-				Context("when the provided domain is an HTTP domain", func() {
+				When("the provided domain is an HTTP domain", func() {
 					BeforeEach(func() {
 						fakeV2Actor.GetDomainsByNameAndOrganizationReturns(
 							[]v2action.Domain{domain},
@@ -1075,7 +1104,7 @@ var _ = Describe("Routes", func() {
 					})
 				})
 
-				Context("when the provided domain is an TCP domain", func() {
+				When("the provided domain is an TCP domain", func() {
 					BeforeEach(func() {
 						domain.RouterGroupType = constant.TCPRouterGroup
 
@@ -1104,7 +1133,7 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when the provided domain does not exist", func() {
+			When("the provided domain does not exist", func() {
 				BeforeEach(func() {
 					fakeV2Actor.GetDomainsByNameAndOrganizationReturns(
 						[]v2action.Domain{},
@@ -1125,7 +1154,7 @@ var _ = Describe("Routes", func() {
 				providedManifest.Hostname = "some HO_ST"
 			})
 
-			Context("when the domain is an HTTP domain", func() {
+			When("the domain is an HTTP domain", func() {
 				BeforeEach(func() {
 					domain.Type = constant.SharedDomain
 					fakeV2Actor.GetOrganizationDomainsReturns(
@@ -1156,7 +1185,7 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when the provided domain is an TCP domain", func() {
+			When("the provided domain is an TCP domain", func() {
 				BeforeEach(func() {
 					domain.RouterGroupType = constant.TCPRouterGroup
 					fakeV2Actor.GetOrganizationDomainsReturns(
@@ -1173,7 +1202,7 @@ var _ = Describe("Routes", func() {
 			})
 		})
 
-		Context("when no hostname is requested", func() {
+		When("no hostname is requested", func() {
 			BeforeEach(func() {
 				providedManifest.NoHostname = true
 
@@ -1203,7 +1232,7 @@ var _ = Describe("Routes", func() {
 			})
 
 			Context("the domain is a shared domain", func() {
-				Context("when the domain is a TCP Domain", func() {
+				When("the domain is a TCP Domain", func() {
 					BeforeEach(func() {
 						domain.Type = constant.SharedDomain
 						domain.RouterGroupType = constant.TCPRouterGroup
@@ -1220,7 +1249,7 @@ var _ = Describe("Routes", func() {
 					})
 				})
 
-				Context("when the domain is an HTTP Domain", func() {
+				When("the domain is an HTTP Domain", func() {
 					BeforeEach(func() {
 						domain.Type = constant.SharedDomain
 						fakeV2Actor.GetOrganizationDomainsReturns([]v2action.Domain{domain}, v2action.Warnings{"private-domain-warnings", "shared-domain-warnings"}, nil)
@@ -1239,7 +1268,7 @@ var _ = Describe("Routes", func() {
 				providedManifest.RoutePath = "/some-route-path"
 			})
 
-			Context("when the domain is an HTTP domain", func() {
+			When("the domain is an HTTP domain", func() {
 				BeforeEach(func() {
 					domain.Type = constant.SharedDomain
 					fakeV2Actor.GetOrganizationDomainsReturns(
@@ -1272,7 +1301,7 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when the provided domain is a TCP domain", func() {
+			When("the provided domain is a TCP domain", func() {
 				BeforeEach(func() {
 					domain.RouterGroupType = constant.TCPRouterGroup
 					fakeV2Actor.GetOrganizationDomainsReturns(
@@ -1290,8 +1319,8 @@ var _ = Describe("Routes", func() {
 			})
 		})
 
-		Context("when no route settings are provided (default route)", func() {
-			Context("when retrieving the domains is successful", func() {
+		When("no route settings are provided (default route)", func() {
+			When("retrieving the domains is successful", func() {
 				BeforeEach(func() {
 					fakeV2Actor.GetOrganizationDomainsReturns(
 						[]v2action.Domain{domain},
@@ -1300,8 +1329,8 @@ var _ = Describe("Routes", func() {
 					)
 				})
 
-				Context("when the app name is simple", func() {
-					Context("when the route exists", func() {
+				When("the app name is simple", func() {
+					When("the route exists", func() {
 						BeforeEach(func() {
 							fakeV2Actor.FindRouteBoundToSpaceWithSettingsReturns(v2action.Route{
 								Domain:    domain,
@@ -1333,7 +1362,7 @@ var _ = Describe("Routes", func() {
 							}))
 						})
 
-						Context("when the route is in known routes", func() {
+						When("the route is in known routes", func() {
 							BeforeEach(func() {
 								knownRoutes = []v2action.Route{{
 									Domain:    domain,
@@ -1358,7 +1387,7 @@ var _ = Describe("Routes", func() {
 							})
 						})
 
-						Context("when the route does not exist", func() {
+						When("the route does not exist", func() {
 							BeforeEach(func() {
 								fakeV2Actor.FindRouteBoundToSpaceWithSettingsReturns(v2action.Route{}, v2action.Warnings{"get-route-warnings"}, actionerror.RouteNotFoundError{})
 							})
@@ -1371,7 +1400,7 @@ var _ = Describe("Routes", func() {
 							})
 						})
 
-						Context("when retrieving the routes errors", func() {
+						When("retrieving the routes errors", func() {
 							var expectedErr error
 
 							BeforeEach(func() {
@@ -1387,7 +1416,7 @@ var _ = Describe("Routes", func() {
 					})
 				})
 
-				Context("when the app name is complex", func() {
+				When("the app name is complex", func() {
 					BeforeEach(func() {
 						providedManifest.Name = "$Some App 1234567890"
 					})
@@ -1402,7 +1431,7 @@ var _ = Describe("Routes", func() {
 					})
 				})
 
-				Context("when the app name is not a usable hostname", func() {
+				When("the app name is not a usable hostname", func() {
 					BeforeEach(func() {
 						providedManifest.Name = " %^ @# **(& "
 					})
@@ -1417,7 +1446,7 @@ var _ = Describe("Routes", func() {
 				})
 			})
 
-			Context("when retrieving the domains errors", func() {
+			When("retrieving the domains errors", func() {
 				var expectedErr error
 
 				BeforeEach(func() {

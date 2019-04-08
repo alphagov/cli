@@ -30,58 +30,58 @@ var _ = Describe("StagingTimeoutError", func() {
 			}
 		})
 
-		Context("when called with a float", func() {
+		When("called with a float", func() {
 			It("prints the error without trailing zeros", func() {
 				err := StagingTimeoutError{
 					AppName: "sliders",
 					Timeout: 150 * time.Second,
 				}
 
-				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 2.5 minutes"))
+				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 2.5 minute(s)"))
 			})
 		})
 
-		Context("when called with an integer", func() {
+		When("called with an integer", func() {
 			It("prints the error with integer precision", func() {
 				err := StagingTimeoutError{
 					AppName: "sliders",
 					Timeout: 120 * time.Second,
 				}
 
-				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 2 minutes"))
+				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 2 minute(s)"))
 			})
 		})
 
-		Context("when called with a timeout of less than one minute", func() {
+		When("called with a timeout of less than one minute", func() {
 			It("prints the error with 'minutes' instead of 'minute'", func() {
 				err := StagingTimeoutError{
 					AppName: "sliders",
 					Timeout: 30 * time.Second,
 				}
 
-				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 0.5 minutes"))
+				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 0.5 minute(s)"))
 			})
 		})
 
-		Context("when called with a timeout of exactly one minute", func() {
+		When("called with a timeout of exactly one minute", func() {
 			It("prints the error with 'minute' instead of 'minutes'", func() {
 				err := StagingTimeoutError{
 					AppName: "sliders",
 					Timeout: 60 * time.Second,
 				}
 
-				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 1 minute"))
+				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 1 minute(s)"))
 			})
 		})
 
-		Context("when called with a timeout of more than one minute", func() {
+		When("called with a timeout of more than one minute", func() {
 			It("prints the error with 'minutes' instead of 'minute'", func() {
 				err := StagingTimeoutError{
 					AppName: "sliders",
 					Timeout: 120 * time.Second,
 				}
 
-				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 2 minutes"))
+				Expect(err.Translate(translateFunc)).To(Equal("Error staging application sliders: timed out after 2 minute(s)"))
 			})
 		})
 	})

@@ -9,15 +9,15 @@ import (
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
 	"code.cloudfoundry.org/cli/cf/trace/tracefakes"
+	testcmd "code.cloudfoundry.org/cli/cf/util/testhelpers/commands"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 	"code.cloudfoundry.org/cli/plugin/models"
-	testcmd "code.cloudfoundry.org/cli/util/testhelpers/commands"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
 
 	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
 	"code.cloudfoundry.org/cli/cf/models"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 
 	"code.cloudfoundry.org/cli/cf/commands/service"
 	. "github.com/onsi/ginkgo"
@@ -136,6 +136,7 @@ var _ = Describe("services", func() {
 
 		userProvidedServiceInstance := models.ServiceInstance{}
 		userProvidedServiceInstance.Name = "my-service-provided-by-user"
+		userProvidedServiceInstance.Type = "user_provided_service_instance"
 
 		serviceInstances := []models.ServiceInstance{serviceInstance, serviceInstance2, userProvidedServiceInstance}
 
@@ -214,6 +215,7 @@ var _ = Describe("services", func() {
 			userProvidedServiceInstance := models.ServiceInstance{}
 			userProvidedServiceInstance.Name = "my-service-provided-by-user"
 			userProvidedServiceInstance.GUID = "678"
+			userProvidedServiceInstance.Type = "user_provided_service_instance"
 
 			serviceInstances := []models.ServiceInstance{serviceInstance, serviceInstance2, userProvidedServiceInstance}
 

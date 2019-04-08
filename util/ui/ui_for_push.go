@@ -21,6 +21,53 @@ type Change struct {
 	HiddenValue  bool
 }
 
+// DisplayChangeForPush will display the header and old/new value with the
+// appropriately red/green minuses and pluses.
+func (ui *UI) DisplayChangeForPush(header string, stringTypePadding int, hiddenValue bool, originalValue interface{}, newValue interface{}) error {
+	ui.terminalLock.Lock()
+	defer ui.terminalLock.Unlock()
+
+	originalType := reflect.ValueOf(originalValue).Type()
+	newType := reflect.ValueOf(newValue).Type()
+	if originalType != newType {
+		return ErrValueMissmatch
+	}
+
+	offset := strings.Repeat(" ", stringTypePadding)
+
+	switch oVal := originalValue.(type) {
+	case int:
+		nVal := newValue.(int)
+		ui.displayDiffForInt(offset, header, oVal, nVal)
+	case types.NullInt:
+		nVal := newValue.(types.NullInt)
+		ui.displayDiffForNullInt(offset, header, oVal, nVal)
+	case uint64:
+		nVal := newValue.(uint64)
+		ui.displayDiffForUint64(offset, header, oVal, nVal)
+	case string:
+		nVal := newValue.(string)
+		ui.displayDiffForString(offset, header, hiddenValue, oVal, nVal)
+	case []string:
+		nVal := newValue.([]string)
+		if len(oVal) == 0 && len(nVal) == 0 {
+			return nil
+		}
+
+		ui.displayDiffForStrings(offset, header, oVal, nVal)
+	case map[string]string:
+		nVal := newValue.(map[string]string)
+		if len(oVal) == 0 && len(nVal) == 0 {
+			return nil
+		}
+
+		ui.displayDiffForMapStringString(offset, header, oVal, nVal)
+	default:
+		panic(fmt.Sprintf("diff display does not have case for '%s'", header))
+	}
+	return nil
+}
+
 // DisplayChangesForPush will display the set of changes via
 // DisplayChangeForPush in the order given.
 func (ui *UI) DisplayChangesForPush(changeSet []Change) error {
@@ -43,50 +90,6 @@ func (ui *UI) DisplayChangesForPush(changeSet []Change) error {
 		}
 	}
 
-	return nil
-}
-
-// DisplayChangeForPush will display the header and old/new value with the
-// appropriately red/green minuses and pluses.
-func (ui *UI) DisplayChangeForPush(header string, stringTypePadding int, hiddenValue bool, originalValue interface{}, newValue interface{}) error {
-	ui.terminalLock.Lock()
-	defer ui.terminalLock.Unlock()
-
-	originalType := reflect.ValueOf(originalValue).Type()
-	newType := reflect.ValueOf(newValue).Type()
-	if originalType != newType {
-		return ErrValueMissmatch
-	}
-
-	offset := strings.Repeat(" ", stringTypePadding)
-
-	switch oVal := originalValue.(type) {
-	case int:
-		nVal := newValue.(int)
-		ui.displayDiffForInt(offset, header, oVal, nVal)
-	case types.NullInt:
-		nVal := newValue.(types.NullInt)
-		ui.displayDiffForNullInt(offset, header, oVal, nVal)
-	case string:
-		nVal := newValue.(string)
-		ui.displayDiffForString(offset, header, hiddenValue, oVal, nVal)
-	case []string:
-		nVal := newValue.([]string)
-		if len(oVal) == 0 && len(nVal) == 0 {
-			return nil
-		}
-
-		ui.displayDiffForStrings(offset, header, oVal, nVal)
-	case map[string]string:
-		nVal := newValue.(map[string]string)
-		if len(oVal) == 0 && len(nVal) == 0 {
-			return nil
-		}
-
-		ui.displayDiffForMapStringString(offset, header, oVal, nVal)
-	default:
-		panic(fmt.Sprintf("diff display does not have case for '%s'", header))
-	}
 	return nil
 }
 
@@ -191,15 +194,30 @@ func (ui UI) displayDiffForStrings(offset string, header string, oldList []strin
 		inOld := existsIn(item, oldList)
 		inNew := existsIn(item, newList)
 
-		if inOld && inNew {
+		switch {
+		case inOld && inNew:
 			fmt.Fprintf(ui.Out, "    %s\n", item)
-		} else if inOld {
+		case inOld:
 			formattedOld := fmt.Sprintf("-   %s", item)
 			fmt.Fprintln(ui.Out, ui.modifyColor(formattedOld, color.New(color.FgRed)))
-		} else {
+		default:
 			formattedNew := fmt.Sprintf("+   %s", item)
 			fmt.Fprintln(ui.Out, ui.modifyColor(formattedNew, color.New(color.FgGreen)))
 		}
+	}
+}
+
+func (ui UI) displayDiffForUint64(offset string, header string, oldValue uint64, newValue uint64) {
+	if oldValue != newValue {
+		formattedOld := fmt.Sprintf("- %s%s%d", ui.TranslateText(header), offset, oldValue)
+		formattedNew := fmt.Sprintf("+ %s%s%d", ui.TranslateText(header), offset, newValue)
+
+		if oldValue != 0 {
+			fmt.Fprintln(ui.Out, ui.modifyColor(formattedOld, color.New(color.FgRed)))
+		}
+		fmt.Fprintln(ui.Out, ui.modifyColor(formattedNew, color.New(color.FgGreen)))
+	} else {
+		fmt.Fprintf(ui.Out, "  %s%s%d\n", ui.TranslateText(header), offset, oldValue)
 	}
 }
 

@@ -5,14 +5,14 @@ import (
 	"code.cloudfoundry.org/cli/cf/flags"
 	"code.cloudfoundry.org/cli/cf/models"
 	"code.cloudfoundry.org/cli/cf/requirements"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 	"code.cloudfoundry.org/cli/plugin/models"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
 
 	"code.cloudfoundry.org/cli/cf/api"
 	"code.cloudfoundry.org/cli/cf/commands/organization"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -132,14 +132,14 @@ var _ = Describe("org command", func() {
 				},
 				Domains: []models.DomainFields{
 					models.DomainFields{
-						Name: "cfapps.io",
-						GUID: "1111",
+						Name:                   "cfapps.io",
+						GUID:                   "1111",
 						OwningOrganizationGUID: "my-org-guid",
 						Shared:                 true,
 					},
 					models.DomainFields{
-						Name: "cf-app.com",
-						GUID: "2222",
+						Name:                   "cf-app.com",
+						GUID:                   "2222",
 						OwningOrganizationGUID: "my-org-guid",
 						Shared:                 false,
 					},

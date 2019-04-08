@@ -12,11 +12,19 @@ const (
 	OrganizationGUIDFilter FilterType = "organization_guid"
 	// RouteGUIDFilter is the name of the 'route_guid' filter.
 	RouteGUIDFilter FilterType = "route_guid"
+	// ServiceBrokerGUIDFilter is the name of the 'service_broker_guid' filter.
+	ServiceBrokerGUIDFilter FilterType = "service_broker_guid"
+	// ServiceGUIDFilter is the name of the 'service_guid' filter.
+	ServiceGUIDFilter FilterType = "service_guid"
 	// ServiceInstanceGUIDFilter is the name of the 'service_instance_guid' filter.
 	ServiceInstanceGUIDFilter FilterType = "service_instance_guid"
+	// ServicePlanGUIDFilter is the name of the 'service_plan_guid' filter.
+	ServicePlanGUIDFilter FilterType = "service_plan_guid"
 	// SpaceGUIDFilter is the name of the 'space_guid' filter.
 	SpaceGUIDFilter FilterType = "space_guid"
 
+	// LabelFilter is the name of the 'label' filter.
+	LabelFilter FilterType = "label"
 	// NameFilter is the name of the 'name' filter.
 	NameFilter FilterType = "name"
 	// HostFilter is the name of the 'host' filter.
@@ -25,7 +33,11 @@ const (
 	PathFilter FilterType = "path"
 	// PortFilter is the name of the 'port' filter.
 	PortFilter FilterType = "port"
-
+	// ProviderFilter is the name of the 'provider' filter.
+	// Deprecated: This is no longer supported on CF API versions above 2.46.0
+	ProviderFilter FilterType = "provider"
+	//StackFilter is the name of the 'stack' filter.
+	StackFilter FilterType = "stack"
 	// TimestampFilter is the name of the 'timestamp' filter.
 	TimestampFilter FilterType = "timestamp"
 	// TypeFilter is the name of the 'type' filter.

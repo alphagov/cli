@@ -13,13 +13,12 @@ import (
 	"code.cloudfoundry.org/cli/cf/models"
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
-	"github.com/blang/semver"
 
 	"code.cloudfoundry.org/cli/cf/api/apifakes"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -39,6 +38,7 @@ var _ = Describe("BindRouteService", func() {
 		fakeDomain models.DomainFields
 
 		loginRequirement           requirements.Requirement
+		targetRequirement          requirements.Requirement
 		domainRequirement          *requirementsfakes.FakeDomainRequirement
 		serviceInstanceRequirement *requirementsfakes.FakeServiceInstanceRequirement
 		minAPIVersionRequirement   requirements.Requirement
@@ -70,6 +70,9 @@ var _ = Describe("BindRouteService", func() {
 
 		loginRequirement = &passingRequirement{Name: "login-requirement"}
 		factory.NewLoginRequirementReturns(loginRequirement)
+
+		targetRequirement = &passingRequirement{Name: "target-requirement"}
+		factory.NewTargetedSpaceRequirementReturns(targetRequirement)
 
 		domainRequirement = new(requirementsfakes.FakeDomainRequirement)
 		factory.NewDomainRequirementReturns(domainRequirement)
@@ -115,11 +118,18 @@ var _ = Describe("BindRouteService", func() {
 				Expect(actualRequirements).To(ContainElement(loginRequirement))
 			})
 
+			It("returns a TargetedSpaceRequirement", func() {
+				actualRequirements, err := cmd.Requirements(factory, flagContext)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(factory.NewTargetedSpaceRequirementCallCount()).To(Equal(1))
+				Expect(actualRequirements).To(ContainElement(targetRequirement))
+			})
+
 			It("returns a DomainRequirement", func() {
 				actualRequirements, err := cmd.Requirements(factory, flagContext)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(factory.NewLoginRequirementCallCount()).To(Equal(1))
-				Expect(actualRequirements).To(ContainElement(loginRequirement))
+				Expect(factory.NewDomainRequirementCallCount()).To(Equal(1))
+				Expect(actualRequirements).To(ContainElement(domainRequirement))
 			})
 
 			It("returns a ServiceInstanceRequirement", func() {
@@ -127,19 +137,6 @@ var _ = Describe("BindRouteService", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(factory.NewServiceInstanceRequirementCallCount()).To(Equal(1))
 				Expect(actualRequirements).To(ContainElement(serviceInstanceRequirement))
-			})
-
-			It("returns a MinAPIVersionRequirement", func() {
-				actualRequirements, err := cmd.Requirements(factory, flagContext)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(factory.NewMinAPIVersionRequirementCallCount()).To(Equal(1))
-				Expect(actualRequirements).To(ContainElement(minAPIVersionRequirement))
-
-				feature, requiredVersion := factory.NewMinAPIVersionRequirementArgsForCall(0)
-				Expect(feature).To(Equal("bind-route-service"))
-				expectedRequiredVersion, err := semver.Make("2.51.0")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(requiredVersion).To(Equal(expectedRequiredVersion))
 			})
 		})
 	})
@@ -383,6 +380,7 @@ var _ = Describe("BindRouteService", func() {
 				BeforeEach(func() {
 					serviceInstance := models.ServiceInstance{}
 					serviceInstance.GUID = "service-instance-guid"
+					serviceInstance.Type = "user_provided_service_instance"
 					serviceInstance.ServicePlan = models.ServicePlanFields{
 						GUID: "",
 					}

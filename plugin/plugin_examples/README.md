@@ -1,5 +1,8 @@
 If you have any questions about developing a CLI plugin, ask away on the [cf-dev mailing list](https://lists.cloudfoundry.org/archives/list/cf-dev@lists.cloudfoundry.org/) (many plugin developers there!) or the #cli channel in our Slack community.
 
+# Future updates to the architecture
+Our current plugin architecture currently requires a review and possible large overhaul. Until then, there are no current plans to update our existing architecture. Feel free to provide input [here](https://www.pivotaltracker.com/story/show/157201049) where you can provide feedback.
+
 # Changes in v6.25.0
 - `GetApp` now returns `Path` and `Port` information.
 
@@ -175,3 +178,7 @@ To remove a plugin, run:
   }
 ```
 - Due to architectural limitations, calling CLI core commands is not concurrency-safe. The correct execution of concurrent commands is not guaranteed. An architecture restructuring is in the works to fix this in the near future.
+
+- Due to our legacy code, the plugin architecture does not currently work with newer CLI features. See a more verbose explanation [here](https://github.com/cloudfoundry/cli/issues/1399#issuecomment-409061226).
+
+- Due to our legacy code, when you `CF_TRACE=true`, the refresh_token in the request body is not sanitized.

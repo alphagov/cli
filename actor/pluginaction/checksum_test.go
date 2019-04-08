@@ -26,8 +26,8 @@ var _ = Describe("Checksums", func() {
 		BeforeEach(func() {
 			var err error
 			file, err = ioutil.TempFile("", "")
-			defer file.Close()
 			Expect(err).NotTo(HaveOccurred())
+			defer file.Close()
 
 			err = ioutil.WriteFile(file.Name(), []byte("foo"), 0600)
 			Expect(err).NotTo(HaveOccurred())
@@ -38,13 +38,13 @@ var _ = Describe("Checksums", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		Context("when the checksums match", func() {
+		When("the checksums match", func() {
 			It("returns true", func() {
 				Expect(actor.ValidateFileChecksum(file.Name(), "0beec7b5ea3f0fdbc95d0dd47f3c5bc275da8a33")).To(BeTrue())
 			})
 		})
 
-		Context("when the checksums do not match", func() {
+		When("the checksums do not match", func() {
 			It("returns false", func() {
 				Expect(actor.ValidateFileChecksum(file.Name(), "blah")).To(BeFalse())
 			})

@@ -6,17 +6,20 @@ import (
 )
 
 type AppInstanceRow struct {
-	Index  string
-	State  string
-	Since  string
-	CPU    string
-	Memory string
-	Disk   string
+	Index   string
+	State   string
+	Since   string
+	CPU     string
+	Memory  string
+	Disk    string
+	Details string
 }
 
 type AppProcessTable struct {
-	Title     string
-	Instances []AppInstanceRow
+	Type          string
+	InstanceCount string
+	MemUsage      string
+	Instances     []AppInstanceRow
 }
 
 type AppTable struct {
@@ -30,10 +33,7 @@ func ParseV3AppProcessTable(input []byte) AppTable {
 	foundFirstProcess := false
 	for _, row := range rows {
 		if !foundFirstProcess {
-			ok, err := regexp.MatchString(`\A([^:]+):\d/\d\z`, row)
-			if err != nil {
-				panic(err)
-			}
+			ok := regexp.MustCompile(`\Atype:([^:]+)\z`).Match([]byte(row))
 			if ok {
 				foundFirstProcess = true
 			} else {
@@ -45,16 +45,23 @@ func ParseV3AppProcessTable(input []byte) AppTable {
 			continue
 		}
 
-		if strings.HasPrefix(row, "#") {
+		switch {
+		case strings.HasPrefix(row, "#"):
 			// instance row
 			columns := splitColumns(row)
+			details := ""
+			if len(columns) >= 7 {
+				details = columns[6]
+			}
+
 			instanceRow := AppInstanceRow{
-				Index:  columns[0],
-				State:  columns[1],
-				Since:  columns[2],
-				CPU:    columns[3],
-				Memory: columns[4],
-				Disk:   columns[5],
+				Index:   columns[0],
+				State:   columns[1],
+				Since:   columns[2],
+				CPU:     columns[3],
+				Memory:  columns[4],
+				Disk:    columns[5],
+				Details: details,
 			}
 			lastProcessIndex := len(appTable.Processes) - 1
 			appTable.Processes[lastProcessIndex].Instances = append(
@@ -62,12 +69,22 @@ func ParseV3AppProcessTable(input []byte) AppTable {
 				instanceRow,
 			)
 
-		} else if !strings.HasPrefix(row, " ") {
-			// process title
+		case strings.HasPrefix(row, "type:"):
 			appTable.Processes = append(appTable.Processes, AppProcessTable{
-				Title: row,
+				Type: strings.TrimSpace(strings.TrimPrefix(row, "type:")),
 			})
-		} else {
+
+		case strings.HasPrefix(row, "instances:"):
+			lpi := len(appTable.Processes) - 1
+			iVal := strings.TrimSpace(strings.TrimPrefix(row, "instances:"))
+			appTable.Processes[lpi].InstanceCount = iVal
+
+		case strings.HasPrefix(row, "memory usage:"):
+			lpi := len(appTable.Processes) - 1
+			mVal := strings.TrimSpace(strings.TrimPrefix(row, "memory usage:"))
+			appTable.Processes[lpi].MemUsage = mVal
+
+		default:
 			// column headers
 			continue
 		}

@@ -104,11 +104,11 @@ func NewSecureShell(
 	token string,
 ) SecureShell {
 	return &secureShell{
-		secureDialer:      secureDialer,
-		terminalHelper:    terminalHelper,
-		listenerFactory:   listenerFactory,
-		keepAliveInterval: keepAliveInterval,
-		app:               app,
+		secureDialer:           secureDialer,
+		terminalHelper:         terminalHelper,
+		listenerFactory:        listenerFactory,
+		keepAliveInterval:      keepAliveInterval,
+		app:                    app,
 		sshEndpointFingerprint: sshEndpointFingerprint,
 		sshEndpoint:            sshEndpoint,
 		token:                  token,
@@ -325,10 +325,6 @@ func (c *secureShell) Wait() error {
 func (c *secureShell) validateTarget(opts *options.SSHOptions) error {
 	if strings.ToUpper(c.app.State) != "STARTED" {
 		return fmt.Errorf("Application %q is not in the STARTED state", opts.AppName)
-	}
-
-	if !c.app.Diego {
-		return fmt.Errorf("Application %q is not running on Diego", opts.AppName)
 	}
 
 	return nil

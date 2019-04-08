@@ -10,12 +10,22 @@ import (
 // ServiceInstance represents an instance of a service.
 type ServiceInstance ccv2.ServiceInstance
 
-func (instance ServiceInstance) IsManaged() bool {
-	return ccv2.ServiceInstance(instance).Managed()
-}
+// CreateServiceInstance creates a new service instance with the provided attributes.
+func (actor Actor) CreateServiceInstance(spaceGUID, serviceName, servicePlanName, serviceInstanceName, brokerName string, params map[string]interface{}, tags []string) (ServiceInstance, Warnings, error) {
+	var allWarnings Warnings
+	plan, allWarnings, err := actor.getServicePlanForServiceInSpace(servicePlanName, serviceName, spaceGUID, brokerName)
 
-func (instance ServiceInstance) IsUserProvided() bool {
-	return ccv2.ServiceInstance(instance).UserProvided()
+	if err != nil {
+		return ServiceInstance{}, allWarnings, err
+	}
+
+	instance, warnings, err := actor.CloudControllerClient.CreateServiceInstance(spaceGUID, plan.GUID, serviceInstanceName, params, tags)
+	allWarnings = append(allWarnings, warnings...)
+	if err != nil {
+		return ServiceInstance{}, allWarnings, err
+	}
+
+	return ServiceInstance(instance), allWarnings, nil
 }
 
 func (actor Actor) GetServiceInstance(guid string) (ServiceInstance, Warnings, error) {
@@ -23,6 +33,7 @@ func (actor Actor) GetServiceInstance(guid string) (ServiceInstance, Warnings, e
 	if _, ok := err.(ccerror.ResourceNotFoundError); ok {
 		return ServiceInstance{}, Warnings(warnings), actionerror.ServiceInstanceNotFoundError{GUID: guid}
 	}
+
 	return ServiceInstance(instance), Warnings(warnings), err
 }
 
@@ -88,4 +99,14 @@ func (actor Actor) GetServiceInstancesBySpace(spaceGUID string) ([]ServiceInstan
 	}
 
 	return serviceInstances, Warnings(warnings), nil
+}
+
+// IsManaged returns true if the service instance is managed, othersise false.
+func (instance ServiceInstance) IsManaged() bool {
+	return ccv2.ServiceInstance(instance).Managed()
+}
+
+// IsUserProvided returns true if the service instance is user provided, othersise false.
+func (instance ServiceInstance) IsUserProvided() bool {
+	return ccv2.ServiceInstance(instance).UserProvided()
 }

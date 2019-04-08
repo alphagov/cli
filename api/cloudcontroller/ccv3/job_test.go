@@ -7,6 +7,7 @@ import (
 
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	. "code.cloudfoundry.org/cli/api/cloudcontroller/ccv3"
+	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/ccv3fakes"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/constant"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -39,6 +40,31 @@ var _ = Describe("Job", func() {
 			Entry("when complete, it returns false", constant.JobComplete, false),
 			Entry("when processing, it returns false", constant.JobProcessing, false),
 		)
+
+		DescribeTable("Errors converts JobErrorDetails",
+			func(code int, expectedErrType error) {
+				rawErr := JobErrorDetails{
+					Code:   constant.JobErrorCode(code),
+					Detail: fmt.Sprintf("code %d", code),
+					Title:  "some-err-title",
+				}
+
+				job := Job{
+					GUID:      "some-job-guid",
+					RawErrors: []JobErrorDetails{rawErr},
+				}
+
+				Expect(job.Errors()).To(HaveLen(1))
+				Expect(job.Errors()[0]).To(MatchError(expectedErrType))
+			},
+
+			Entry("BuildpackNameStackTaken", 290000, ccerror.BuildpackAlreadyExistsForStackError{Message: "code 290000"}),
+			Entry("BuildpackInvalid", 290003, ccerror.BuildpackAlreadyExistsWithoutStackError{Message: "code 290003"}),
+			Entry("BuildpackStacksDontMatch", 390011, ccerror.BuildpackStacksDontMatchError{Message: "code 390011"}),
+			Entry("BuildpackStackDoesNotExist", 390012, ccerror.BuildpackStackDoesNotExistError{Message: "code 390012"}),
+			Entry("BuildpackZipError", 390013, ccerror.BuildpackZipInvalidError{Message: "code 390013"}),
+			Entry("V3JobFailedError", 1111111, ccerror.V3JobFailedError{JobGUID: "some-job-guid", Code: constant.JobErrorCode(1111111), Detail: "code 1111111", Title: "some-err-title"}),
+		)
 	})
 
 	Describe("GetJob", func() {
@@ -51,7 +77,7 @@ var _ = Describe("Job", func() {
 		)
 
 		BeforeEach(func() {
-			client = NewTestClient()
+			client, _ = NewTestClient()
 			jobLocation = JobURL(fmt.Sprintf("%s/some-job-location", server.URL()))
 		})
 
@@ -59,7 +85,7 @@ var _ = Describe("Job", func() {
 			job, warnings, executeErr = client.GetJob(jobLocation)
 		})
 
-		Context("when no errors are encountered", func() {
+		When("no errors are encountered", func() {
 			BeforeEach(func() {
 				jsonResponse := `{
 						"guid": "job-guid",
@@ -90,7 +116,7 @@ var _ = Describe("Job", func() {
 			})
 		})
 
-		Context("when the job fails", func() {
+		When("the job fails", func() {
 			BeforeEach(func() {
 				jsonResponse := `{
 						"guid": "job-guid",
@@ -125,9 +151,9 @@ var _ = Describe("Job", func() {
 				Expect(warnings).To(ConsistOf(Warnings{"warning-1", "warning-2"}))
 				Expect(job.GUID).To(Equal("job-guid"))
 				Expect(job.State).To(Equal(constant.JobFailed))
-				Expect(job.Errors[0].Detail).To(Equal("blah blah"))
-				Expect(job.Errors[0].Title).To(Equal("CF-JobFail"))
-				Expect(job.Errors[0].Code).To(Equal(1234))
+				Expect(job.RawErrors[0].Detail).To(Equal("blah blah"))
+				Expect(job.RawErrors[0].Title).To(Equal("CF-JobFail"))
+				Expect(job.RawErrors[0].Code).To(BeEquivalentTo(1234))
 			})
 		})
 	})
@@ -143,7 +169,7 @@ var _ = Describe("Job", func() {
 		)
 
 		BeforeEach(func() {
-			client = NewTestClient(Config{JobPollingTimeout: time.Minute})
+			client, _ = NewTestClient(Config{JobPollingTimeout: time.Minute})
 			jobLocation = JobURL(fmt.Sprintf("%s/some-job-location", server.URL()))
 		})
 
@@ -152,7 +178,7 @@ var _ = Describe("Job", func() {
 			warnings, executeErr = client.PollJob(jobLocation)
 		})
 
-		Context("when the job starts queued and then finishes successfully", func() {
+		When("the job starts queued and then finishes successfully", func() {
 			BeforeEach(func() {
 				server.AppendHandlers(
 					CombineHandlers(
@@ -212,12 +238,8 @@ var _ = Describe("Job", func() {
 			})
 		})
 
-		Context("when the job starts queued and then fails", func() {
-			var jobFailureMessage string
-
+		When("the job starts queued and then fails", func() {
 			BeforeEach(func() {
-				jobFailureMessage = "I am a banana!!!"
-
 				server.AppendHandlers(
 					CombineHandlers(
 						VerifyRequest(http.MethodGet, "/some-job-location"),
@@ -263,37 +285,43 @@ var _ = Describe("Job", func() {
 							"state": "FAILED",
 							"errors": [ {
 								"detail": "%s",
-								"title": "CF-AppBitsUploadInvalid",
-								"code": 160001
+								"code": %d
 							} ],
 							"links": {
 								"self": {
 									"href": "/v3/jobs/job-guid"
 								}
 							}
-						}`, jobFailureMessage), http.Header{"X-Cf-Warnings": {"warning-4"}}),
+						}`, "some-message", constant.JobErrorCodeBuildpackAlreadyExistsForStack), http.Header{"X-Cf-Warnings": {"warning-4"}}),
 					))
 			})
 
-			It("returns a JobFailedError", func() {
-				Expect(executeErr).To(MatchError(ccerror.JobFailedError{
-					JobGUID: "job-guid",
-					Message: jobFailureMessage,
+			It("returns the first error", func() {
+				Expect(executeErr).To(MatchError(ccerror.BuildpackAlreadyExistsForStackError{
+					Message: "some-message",
 				}))
 				Expect(warnings).To(ConsistOf("warning-1", "warning-2", "warning-3", "warning-4"))
 			})
 		})
 
 		Context("polling timeouts", func() {
-			Context("when the job runs longer than the OverallPollingTimeout", func() {
-				var jobPollingTimeout time.Duration
+			When("the job runs longer than the OverallPollingTimeout", func() {
+				var (
+					jobPollingTimeout time.Duration
+					fakeClock         *ccv3fakes.FakeClock
+				)
 
 				BeforeEach(func() {
 					jobPollingTimeout = 100 * time.Millisecond
-					client = NewTestClient(Config{
-						JobPollingTimeout:  jobPollingTimeout,
-						JobPollingInterval: 60 * time.Millisecond,
+					client, fakeClock = NewTestClient(Config{
+						JobPollingTimeout: jobPollingTimeout,
 					})
+
+					clockTime := time.Now()
+					fakeClock.NowReturnsOnCall(0, clockTime)
+					fakeClock.NowReturnsOnCall(1, clockTime)
+					fakeClock.NowReturnsOnCall(2, clockTime.Add(60*time.Millisecond))
+					fakeClock.NowReturnsOnCall(3, clockTime.Add(60*time.Millisecond*2))
 
 					server.AppendHandlers(
 						CombineHandlers(

@@ -7,7 +7,7 @@ image_resource:
     repository: relintdockerhubpushbot/cf-deployment-concourse-tasks
 
 inputs:
-  - name: bosh-lite-lock
+  - name: bosh-lock
   - name: cf-cli-binaries
   - name: vars-store
 
@@ -28,17 +28,23 @@ run:
   - |
     set -eu
 
-    DOMAIN=`cat bosh-lite-lock/name`
+    DOMAIN=`cat bosh-lock/name`
     API="api.${DOMAIN}"
-    CF_USER="admin"
+    CF_INT_USERNAME="admin"
 
-    ENV=$(cat bosh-lite-lock/name | cut -d "." -f 1)
-    CF_PASSWORD=$(bosh int vars-store/ci/infrastructure/$ENV/deployment-vars.yml --path /cf_admin_password)
+    ENV=$(cat bosh-lock/name | cut -d "." -f 1)
+
+    pushd vars-store/ci/infrastructure/$ENV
+      eval "$(bbl print-env)"
+    popd
+
+    credhub login
+    CF_INT_PASSWORD=$(credhub get -n /bosh-$ENV/cf/cf_admin_password | bosh interpolate --path /value -)
 
     cat << EOF | jq -S . > cats-config/integration_config.json
     {
-      "admin_password": "${CF_PASSWORD}",
-      "admin_user": "${CF_USER}",
+      "admin_password": "${CF_INT_PASSWORD}",
+      "admin_user": "${CF_INT_USERNAME}",
       "api": "${API}",
       "apps_domain": "${DOMAIN}",
       "backend" : "diego",
@@ -54,7 +60,8 @@ run:
       "include_detect": true,
       "include_docker": true,
       "include_internet_dependent": true,
-      "include_isolation_segments": false,
+      "include_isolation_segments": true,
+      "isolation_segment_name": "persistent_isolation_segment",
       "include_persistent_app": false,
       "include_private_docker_registry": false,
       "include_privileged_container_support": false,
@@ -81,6 +88,8 @@ run:
       ln -s ${PWD}/cf-cli_linux_x86-64 ${bindir}/cf
     popd
 
+    export CF_USERNAME=${CF_INT_USERNAME}
+    export CF_PASSWORD=${CF_INT_PASSWORD}
     cf api ${API} --skip-ssl-validation
-    cf auth ${CF_USER} ${CF_PASSWORD}
+    cf auth
     cf enable-feature-flag diego_docker

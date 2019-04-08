@@ -2,6 +2,7 @@ package ui_test
 
 import (
 	"errors"
+	"regexp"
 	"time"
 
 	. "code.cloudfoundry.org/cli/util/ui"
@@ -33,7 +34,7 @@ var _ = Describe("Request Logger Terminal Display", func() {
 			err = display.Stop()
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(testUI.Out).To(Say("\\[PRIVATE DATA HIDDEN\\]"))
+			Expect(testUI.Out).To(Say(`\[PRIVATE DATA HIDDEN\]`))
 		})
 	})
 
@@ -64,7 +65,7 @@ Origin: wss://doppler.bosh-lite.com:443`
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(testUI.Out).To(Say("Connection: Upgrade"))
-			Expect(testUI.Out).To(Say("Authorization: \\[PRIVATE DATA HIDDEN\\]"))
+			Expect(testUI.Out).To(Say(`Authorization: \[PRIVATE DATA HIDDEN\]`))
 			Expect(testUI.Out).To(Say("Origin: wss://doppler.bosh-lite.com:443"))
 		})
 	})
@@ -94,7 +95,7 @@ Origin: wss://doppler.bosh-lite.com:443`
 	})
 
 	Describe("DisplayJSONBody", func() {
-		Context("when provided well formed JSON", func() {
+		When("provided well formed JSON", func() {
 			It("displayed a formated output", func() {
 				raw := `{"a":"b", "c":"d", "don't html escape":"<&>"}`
 				formatted := `{
@@ -112,7 +113,7 @@ Origin: wss://doppler.bosh-lite.com:443`
 			})
 		})
 
-		Context("when the body is empty", func() {
+		When("the body is empty", func() {
 			It("does not display the body", func() {
 				err := display.DisplayJSONBody(nil)
 				Expect(err).ToNot(HaveOccurred())
@@ -124,9 +125,9 @@ Origin: wss://doppler.bosh-lite.com:443`
 			})
 		})
 
-		Context("when provided malformed JSON", func() {
+		When("provided malformed JSON", func() {
 			It("displays the raw body", func() {
-				raw := `[{"data":1, "banana": 2}]`
+				raw := `[{"data":1, "banana": 2}`
 				err := display.DisplayJSONBody([]byte(raw))
 				Expect(err).ToNot(HaveOccurred())
 
@@ -186,7 +187,7 @@ Origin: wss://doppler.bosh-lite.com:443`
 			err = display.Stop()
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(testUI.Out).To(Say("banana: \\[%s\\]", passedTime.Format(time.RFC3339)))
+			Expect(testUI.Out).To(Say(`banana: \[%s\]`, regexp.QuoteMeta(passedTime.Format(time.RFC3339))))
 		})
 	})
 
@@ -213,6 +214,30 @@ Origin: wss://doppler.bosh-lite.com:443`
 			Expect(display.Stop()).NotTo(HaveOccurred())
 			Eventually(c).Should(Receive())
 			Expect(display.Stop()).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("UI", func() {
+		Describe("RequestLoggerTerminalDisplay", func() {
+			BeforeEach(func() {
+				Expect(display.Stop()).ToNot(HaveOccurred())
+			})
+
+			It("returns a RequestLoggerTerminalDisplay with the consistent display mutex", func() {
+				logger1 := testUI.RequestLoggerTerminalDisplay()
+				logger2 := testUI.RequestLoggerTerminalDisplay()
+
+				c := make(chan bool)
+				err := logger1.Start()
+				Expect(err).ToNot(HaveOccurred())
+				go func() {
+					Expect(logger2.Start()).ToNot(HaveOccurred())
+					c <- true
+				}()
+				Consistently(c).ShouldNot(Receive())
+				Expect(logger1.Stop()).ToNot(HaveOccurred())
+				Eventually(c).Should(Receive())
+			})
 		})
 	})
 })

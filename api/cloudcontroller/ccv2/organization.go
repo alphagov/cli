@@ -1,6 +1,10 @@
 package ccv2
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/url"
+
 	"code.cloudfoundry.org/cli/api/cloudcontroller"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2/internal"
@@ -46,8 +50,64 @@ func (org *Organization) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-//go:generate go run $GOPATH/src/code.cloudfoundry.org/cli/util/codegen/generate.go Organization codetemplates/delete_async_by_guid.go.template delete_organization.go
-//go:generate go run $GOPATH/src/code.cloudfoundry.org/cli/util/codegen/generate.go Organization codetemplates/delete_async_by_guid_test.go.template delete_organization_test.go
+type createOrganizationRequestBody struct {
+	Name                string `json:"name"`
+	QuotaDefinitionGUID string `json:"quota_definition_guid,omitempty"`
+}
+
+func (client *Client) CreateOrganization(orgName string, quotaGUID string) (Organization, Warnings, error) {
+	requestBody := createOrganizationRequestBody{
+		Name:                orgName,
+		QuotaDefinitionGUID: quotaGUID,
+	}
+
+	bodyBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return Organization{}, nil, err
+	}
+
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.PostOrganizationRequest,
+		Body:        bytes.NewReader(bodyBytes),
+	})
+
+	if err != nil {
+		return Organization{}, nil, err
+	}
+
+	var org Organization
+	response := cloudcontroller.Response{
+		DecodeJSONResponseInto: &org,
+	}
+
+	err = client.connection.Make(request, &response)
+	return org, response.Warnings, err
+}
+
+// DeleteOrganization deletes the Organization associated with the provided
+// GUID. It will return the Cloud Controller job that is assigned to the
+// Organization deletion.
+func (client *Client) DeleteOrganization(guid string) (Job, Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.DeleteOrganizationRequest,
+		URIParams:   Params{"organization_guid": guid},
+		Query: url.Values{
+			"recursive": {"true"},
+			"async":     {"true"},
+		},
+	})
+	if err != nil {
+		return Job{}, nil, err
+	}
+
+	var job Job
+	response := cloudcontroller.Response{
+		DecodeJSONResponseInto: &job,
+	}
+
+	err = client.connection.Make(request, &response)
+	return job, response.Warnings, err
+}
 
 // GetOrganization returns an Organization associated with the provided GUID.
 func (client *Client) GetOrganization(guid string) (Organization, Warnings, error) {
@@ -61,7 +121,7 @@ func (client *Client) GetOrganization(guid string) (Organization, Warnings, erro
 
 	var org Organization
 	response := cloudcontroller.Response{
-		Result: &org,
+		DecodeJSONResponseInto: &org,
 	}
 
 	err = client.connection.Make(request, &response)
@@ -96,4 +156,98 @@ func (client *Client) GetOrganizations(filters ...Filter) ([]Organization, Warni
 	})
 
 	return fullOrgsList, warnings, err
+}
+
+type updateOrgManagerByUsernameRequestBody struct {
+	Username string `json:"username"`
+}
+
+// UpdateOrganizationManager assigns the org manager role to the UAA user or client with the provided ID.
+func (client *Client) UpdateOrganizationManager(guid string, uaaID string) (Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.PutOrganizationManagerRequest,
+		URIParams:   Params{"organization_guid": guid, "manager_guid": uaaID},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	response := cloudcontroller.Response{}
+	err = client.connection.Make(request, &response)
+
+	return response.Warnings, err
+}
+
+// UpdateOrganizationManagerByUsername assigns the org manager role to the user with the provided name.
+func (client *Client) UpdateOrganizationManagerByUsername(guid string, username string) (Warnings, error) {
+	requestBody := updateOrgManagerByUsernameRequestBody{
+		Username: username,
+	}
+
+	body, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.PutOrganizationManagerByUsernameRequest,
+		Body:        bytes.NewReader(body),
+		URIParams:   Params{"organization_guid": guid},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	response := cloudcontroller.Response{}
+	err = client.connection.Make(request, &response)
+
+	return response.Warnings, err
+}
+
+// UpdateOrganizationUser makes the user or client with the given UAA ID a
+// member of the org.
+func (client *Client) UpdateOrganizationUser(guid string, uaaID string) (Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.PutOrganizationUserRequest,
+		URIParams:   Params{"organization_guid": guid, "user_guid": uaaID},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	response := cloudcontroller.Response{}
+	err = client.connection.Make(request, &response)
+
+	return response.Warnings, err
+}
+
+type updateOrgUserByUsernameRequestBody struct {
+	Username string `json:"username"`
+}
+
+// UpdateOrganizationUserByUsername makes the user with the given username a member of
+// the org.
+func (client Client) UpdateOrganizationUserByUsername(orgGUID string, username string) (Warnings, error) {
+	requestBody := updateOrgUserByUsernameRequestBody{
+		Username: username,
+	}
+
+	body, err := json.Marshal(requestBody)
+	if err != nil {
+		return Warnings{}, err
+	}
+
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.PutOrganizationUserByUsernameRequest,
+		Body:        bytes.NewReader(body),
+		URIParams:   Params{"organization_guid": orgGUID},
+	})
+	if err != nil {
+		return Warnings{}, err
+	}
+
+	response := cloudcontroller.Response{}
+	err = client.connection.Make(request, &response)
+
+	return response.Warnings, err
 }

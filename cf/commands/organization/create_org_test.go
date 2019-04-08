@@ -11,12 +11,12 @@ import (
 	"code.cloudfoundry.org/cli/cf/api/organizations/organizationsfakes"
 	"code.cloudfoundry.org/cli/cf/api/quotas/quotasfakes"
 	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
-	testcmd "code.cloudfoundry.org/cli/util/testhelpers/commands"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testcmd "code.cloudfoundry.org/cli/cf/util/testhelpers/commands"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
 	"code.cloudfoundry.org/cli/cf/commandregistry"
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -122,9 +122,8 @@ var _ = Describe("create-org command", func() {
 			))
 		})
 
-		Context("when CC api version supports assigning orgRole by name, and feature-flag 'set_roles_by_username' is enabled", func() {
+		Context("when feature-flag 'set_roles_by_username' is enabled", func() {
 			BeforeEach(func() {
-				config.SetAPIVersion("2.37.0")
 				flagRepo.FindByNameReturns(models.FeatureFlag{
 					Name:    "set_roles_by_username",
 					Enabled: true,

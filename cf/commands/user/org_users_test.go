@@ -8,16 +8,16 @@ import (
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
 	"code.cloudfoundry.org/cli/cf/trace/tracefakes"
-	"code.cloudfoundry.org/cli/plugin/models"
-	testcmd "code.cloudfoundry.org/cli/util/testhelpers/commands"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testcmd "code.cloudfoundry.org/cli/cf/util/testhelpers/commands"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
+	plugin_models "code.cloudfoundry.org/cli/plugin/models"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	"os"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 )
 
 var _ = Describe("org-users command", func() {
@@ -87,7 +87,7 @@ var _ = Describe("org-users command", func() {
 
 		Context("shows friendly messaage when no users in ORG_MANAGER role", func() {
 			It("shows the special users in the given org", func() {
-				userRepo.ListUsersInOrgForRoleStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
+				userRepo.ListUsersInOrgForRoleWithNoUAAStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
 					userFields := map[models.Role][]models.UserFields{
 						models.RoleOrgManager:     {},
 						models.RoleBillingManager: {user1},
@@ -98,9 +98,9 @@ var _ = Describe("org-users command", func() {
 
 				runCommand("the-org")
 
-				Expect(userRepo.ListUsersInOrgForRoleCallCount()).To(Equal(3))
+				Expect(userRepo.ListUsersInOrgForRoleWithNoUAACallCount()).To(Equal(3))
 				for i, expectedRole := range []models.Role{models.RoleOrgManager, models.RoleBillingManager, models.RoleOrgAuditor} {
-					orgGUID, actualRole := userRepo.ListUsersInOrgForRoleArgsForCall(i)
+					orgGUID, actualRole := userRepo.ListUsersInOrgForRoleWithNoUAAArgsForCall(i)
 					Expect(orgGUID).To(Equal("the-org-guid"))
 					Expect(actualRole).To(Equal(expectedRole))
 				}
@@ -119,7 +119,7 @@ var _ = Describe("org-users command", func() {
 
 		Context("shows friendly messaage when no users in BILLING_MANAGER role", func() {
 			It("shows the special users in the given org", func() {
-				userRepo.ListUsersInOrgForRoleStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
+				userRepo.ListUsersInOrgForRoleWithNoUAAStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
 					userFields := map[models.Role][]models.UserFields{
 						models.RoleOrgManager:     {user1},
 						models.RoleBillingManager: {},
@@ -130,9 +130,9 @@ var _ = Describe("org-users command", func() {
 
 				runCommand("the-org")
 
-				Expect(userRepo.ListUsersInOrgForRoleCallCount()).To(Equal(3))
+				Expect(userRepo.ListUsersInOrgForRoleWithNoUAACallCount()).To(Equal(3))
 				for i, expectedRole := range []models.Role{models.RoleOrgManager, models.RoleBillingManager, models.RoleOrgAuditor} {
-					orgGUID, actualRole := userRepo.ListUsersInOrgForRoleArgsForCall(i)
+					orgGUID, actualRole := userRepo.ListUsersInOrgForRoleWithNoUAAArgsForCall(i)
 					Expect(orgGUID).To(Equal("the-org-guid"))
 					Expect(actualRole).To(Equal(expectedRole))
 				}
@@ -151,7 +151,7 @@ var _ = Describe("org-users command", func() {
 
 		Context("shows friendly messaage when no users in ORG_AUDITOR role", func() {
 			It("shows the special users in the given org", func() {
-				userRepo.ListUsersInOrgForRoleStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
+				userRepo.ListUsersInOrgForRoleWithNoUAAStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
 					userFields := map[models.Role][]models.UserFields{
 						models.RoleOrgManager:     {user1},
 						models.RoleBillingManager: {user2},
@@ -162,9 +162,9 @@ var _ = Describe("org-users command", func() {
 
 				runCommand("the-org")
 
-				Expect(userRepo.ListUsersInOrgForRoleCallCount()).To(Equal(3))
+				Expect(userRepo.ListUsersInOrgForRoleWithNoUAACallCount()).To(Equal(3))
 				for i, expectedRole := range []models.Role{models.RoleOrgManager, models.RoleBillingManager, models.RoleOrgAuditor} {
-					orgGUID, actualRole := userRepo.ListUsersInOrgForRoleArgsForCall(i)
+					orgGUID, actualRole := userRepo.ListUsersInOrgForRoleWithNoUAAArgsForCall(i)
 					Expect(orgGUID).To(Equal("the-org-guid"))
 					Expect(actualRole).To(Equal(expectedRole))
 				}
@@ -192,7 +192,7 @@ var _ = Describe("org-users command", func() {
 			user2 := models.UserFields{Username: "user2"}
 			user3 := models.UserFields{Username: "user3"}
 			user4 := models.UserFields{Username: "user4"}
-			userRepo.ListUsersInOrgForRoleStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
+			userRepo.ListUsersInOrgForRoleWithNoUAAStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
 				userFields := map[models.Role][]models.UserFields{
 					models.RoleOrgManager:     {user, user2},
 					models.RoleBillingManager: {user4},
@@ -210,7 +210,7 @@ var _ = Describe("org-users command", func() {
 		It("shows the special users in the given org", func() {
 			runCommand("the-org")
 
-			orgGUID, _ := userRepo.ListUsersInOrgForRoleArgsForCall(0)
+			orgGUID, _ := userRepo.ListUsersInOrgForRoleWithNoUAAArgsForCall(0)
 			Expect(orgGUID).To(Equal("the-org-guid"))
 			Expect(ui.Outputs()).To(ContainSubstrings(
 				[]string{"Getting users in org", "the-org", "my-user"},
@@ -228,7 +228,7 @@ var _ = Describe("org-users command", func() {
 			BeforeEach(func() {
 				user := models.UserFields{Username: "user1"}
 				user2 := models.UserFields{Username: "user2"}
-				userRepo.ListUsersInOrgForRoleStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
+				userRepo.ListUsersInOrgForRoleWithNoUAAStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
 					userFields := map[models.Role][]models.UserFields{
 						models.RoleOrgUser: {user, user2},
 					}[roleName]
@@ -239,7 +239,7 @@ var _ = Describe("org-users command", func() {
 			It("lists all org users, regardless of role", func() {
 				runCommand("-a", "the-org")
 
-				orgGUID, _ := userRepo.ListUsersInOrgForRoleArgsForCall(0)
+				orgGUID, _ := userRepo.ListUsersInOrgForRoleWithNoUAAArgsForCall(0)
 				Expect(orgGUID).To(Equal("the-org-guid"))
 				Expect(ui.Outputs()).To(ContainSubstrings(
 					[]string{"Getting users in org", "the-org", "my-user"},
@@ -249,25 +249,40 @@ var _ = Describe("org-users command", func() {
 				))
 			})
 		})
+	})
 
-		Context("when cc api verson is >= 2.21.0", func() {
-			It("calls ListUsersInOrgForRoleWithNoUAA()", func() {
-				configRepo.SetAPIVersion("2.22.0")
-				runCommand("the-org")
+	Context("when logged in and given an org with clients", func() {
+		BeforeEach(func() {
+			org := models.Organization{}
+			org.Name = "the-org"
+			org.GUID = "the-org-guid"
 
-				Expect(userRepo.ListUsersInOrgForRoleWithNoUAACallCount()).To(BeNumerically(">=", 1))
-				Expect(userRepo.ListUsersInOrgForRoleCallCount()).To(Equal(0))
-			})
+			client := models.UserFields{GUID: "some-client"}
+			userRepo.ListUsersInOrgForRoleWithNoUAAStub = func(_ string, roleName models.Role) ([]models.UserFields, error) {
+				userFields := map[models.Role][]models.UserFields{
+					models.RoleOrgManager:     {client},
+					models.RoleBillingManager: {},
+					models.RoleOrgAuditor:     {},
+				}[roleName]
+				return userFields, nil
+			}
+
+			requirementsFactory.NewLoginRequirementReturns(requirements.Passing{})
+			organizationReq := new(requirementsfakes.FakeOrganizationRequirement)
+			organizationReq.GetOrganizationReturns(org)
+			requirementsFactory.NewOrganizationRequirementReturns(organizationReq)
 		})
 
-		Context("when cc api verson is < 2.21.0", func() {
-			It("calls ListUsersInOrgForRole()", func() {
-				configRepo.SetAPIVersion("2.20.0")
-				runCommand("the-org")
+		It("lists a client user", func() {
+			runCommand("the-org")
 
-				Expect(userRepo.ListUsersInOrgForRoleWithNoUAACallCount()).To(Equal(0))
-				Expect(userRepo.ListUsersInOrgForRoleCallCount()).To(BeNumerically(">=", 1))
-			})
+			orgGUID, _ := userRepo.ListUsersInOrgForRoleWithNoUAAArgsForCall(0)
+			Expect(orgGUID).To(Equal("the-org-guid"))
+			Expect(ui.Outputs()).To(ContainSubstrings(
+				[]string{"Getting users in org", "the-org", "my-user"},
+				[]string{"ORG MANAGER"},
+				[]string{"some-client (client)"},
+			))
 		})
 	})
 

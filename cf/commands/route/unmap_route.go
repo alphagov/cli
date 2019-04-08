@@ -3,7 +3,6 @@ package route
 import (
 	"fmt"
 
-	"code.cloudfoundry.org/cli/cf"
 	"code.cloudfoundry.org/cli/cf/api"
 	"code.cloudfoundry.org/cli/cf/commandregistry"
 	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
@@ -74,14 +73,6 @@ func (cmd *UnmapRoute) Requirements(requirementsFactory requirements.Factory, fc
 	cmd.domainReq = requirementsFactory.NewDomainRequirement(domainName)
 
 	var reqs []requirements.Requirement
-
-	if fc.String("path") != "" {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement("Option '--path'", cf.RoutePathMinimumAPIVersion))
-	}
-
-	if fc.IsSet("port") {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement("Option '--port'", cf.TCPRoutingMinimumAPIVersion))
-	}
 
 	reqs = append(reqs, []requirements.Requirement{
 		requirementsFactory.NewLoginRequirement(),

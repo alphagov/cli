@@ -11,7 +11,6 @@ import (
 	"code.cloudfoundry.org/cli/cf/flags"
 	. "code.cloudfoundry.org/cli/cf/i18n"
 
-	"code.cloudfoundry.org/cli/cf"
 	"code.cloudfoundry.org/cli/cf/actors"
 	"code.cloudfoundry.org/cli/cf/api"
 	"code.cloudfoundry.org/cli/cf/api/applications"
@@ -65,6 +64,8 @@ func (cmd *Push) MetaData() commandregistry.CommandMetadata {
 	fs["hostname"] = &flags.StringFlag{Name: "hostname", ShortName: "n", Usage: T("Hostname (e.g. my-subdomain)")}
 	fs["p"] = &flags.StringFlag{ShortName: "p", Usage: T("Path to app directory or to a zip file of the contents of the app directory")}
 	fs["s"] = &flags.StringFlag{ShortName: "s", Usage: T("Stack to use (a stack is a pre-built file system, including an operating system, that can run apps)")}
+	fs["vars-file"] = &flags.StringFlag{Usage: T("Path to a variable substitution file for manifest; can specify multiple times")}
+	fs["var"] = &flags.StringFlag{Usage: T("Variable key value pair for variable substitution, (e.g., name=app1); can specify multiple times")}
 	fs["t"] = &flags.StringFlag{ShortName: "t", Usage: T("Time (in seconds) allowed to elapse between starting up an app and the first healthy response from the app")}
 	fs["docker-image"] = &flags.StringFlag{Name: "docker-image", ShortName: "o", Usage: T("Docker-image to be used (e.g. user/docker-image-name)")}
 	fs["docker-username"] = &flags.StringFlag{Name: "docker-username", Usage: T("Repository username; used with password from environment variable CF_DOCKER_PASSWORD")}
@@ -75,8 +76,6 @@ func (cmd *Push) MetaData() commandregistry.CommandMetadata {
 	fs["no-start"] = &flags.BoolFlag{Name: "no-start", Usage: T("Do not start an app after pushing")}
 	fs["random-route"] = &flags.BoolFlag{Name: "random-route", Usage: T("Create a random route for this app")}
 	fs["route-path"] = &flags.StringFlag{Name: "route-path", Usage: T("Path for the route")}
-	// Hidden:true to hide app-ports for release #117189491
-	fs["app-ports"] = &flags.StringFlag{Name: "app-ports", Usage: T("Comma delimited list of ports the application may listen on"), Hidden: true}
 
 	return commandregistry.CommandMetadata{
 		Name:        "push",
@@ -99,12 +98,15 @@ func (cmd *Push) Requirements(requirementsFactory requirements.Factory, fc flags
 
 	reqs = append(reqs, usageReq)
 
-	if fc.String("route-path") != "" {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement("Option '--route-path'", cf.RoutePathMinimumAPIVersion))
-	}
-
-	if fc.String("app-ports") != "" {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement("Option '--app-ports'", cf.MultipleAppPortsMinimumAPIVersion))
+	if fc.String("vars-file") != "" || fc.String("var") != "" {
+		var flags []string
+		if fc.String("vars-file") != "" {
+			flags = append(flags, "vars-file")
+		}
+		if fc.String("var") != "" {
+			flags = append(flags, "var")
+		}
+		reqs = append(reqs, requirementsFactory.NewUnsupportedLegacyFlagRequirement(flags...))
 	}
 
 	reqs = append(reqs, []requirements.Requirement{
@@ -195,11 +197,6 @@ func (cmd *Push) Execute(c flags.FlagContext) error {
 		err = cmd.fetchStackGUID(&appParams)
 		if err != nil {
 			return err
-		}
-
-		if appParams.DockerImage != nil {
-			diego := true
-			appParams.Diego = &diego
 		}
 
 		var app, existingApp models.Application
@@ -703,23 +700,6 @@ func (cmd *Push) getAppParamsFromContext(c flags.FlagContext) (models.AppParams,
 	if c.String("route-path") != "" {
 		routePath := c.String("route-path")
 		appParams.RoutePath = &routePath
-	}
-
-	if c.String("app-ports") != "" {
-		appPortStrings := strings.Split(c.String("app-ports"), ",")
-		appPorts := make([]int, len(appPortStrings))
-
-		for i, s := range appPortStrings {
-			p, err := strconv.Atoi(s)
-			if err != nil {
-				return models.AppParams{}, errors.New(T("Invalid app port: {{.AppPort}}\nApp port must be a number", map[string]interface{}{
-					"AppPort": s,
-				}))
-			}
-			appPorts[i] = p
-		}
-
-		appParams.AppPorts = &appPorts
 	}
 
 	if c.String("b") != "" {

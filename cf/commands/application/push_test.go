@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"code.cloudfoundry.org/cli/cf"
 	"code.cloudfoundry.org/cli/cf/actors/actorsfakes"
 	"code.cloudfoundry.org/cli/cf/api/apifakes"
 	"code.cloudfoundry.org/cli/cf/api/applications/applicationsfakes"
@@ -28,9 +27,9 @@ import (
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/cf/trace"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 	"code.cloudfoundry.org/cli/util/generic"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
@@ -172,46 +171,6 @@ var _ = Describe("Push Command", func() {
 		It("checks the number of args", func() {
 			Expect(requirementsFactory.NewUsageRequirementCallCount()).To(Equal(1))
 			Expect(reqs).To(ContainElement(usageReq))
-		})
-
-		Context("when --route-path is passed in", func() {
-			BeforeEach(func() {
-				err := flagContext.Parse("app-name", "--route-path", "the-path")
-				Expect(err).NotTo(HaveOccurred())
-
-				reqs, err = cmd.Requirements(requirementsFactory, flagContext)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("returns a minAPIVersionRequirement", func() {
-				Expect(requirementsFactory.NewMinAPIVersionRequirementCallCount()).To(Equal(1))
-
-				option, version := requirementsFactory.NewMinAPIVersionRequirementArgsForCall(0)
-				Expect(option).To(Equal("Option '--route-path'"))
-				Expect(version).To(Equal(cf.RoutePathMinimumAPIVersion))
-
-				Expect(reqs).To(ContainElement(minVersionReq))
-			})
-		})
-
-		Context("when --app-ports is passed in", func() {
-			BeforeEach(func() {
-				err := flagContext.Parse("app-name", "--app-ports", "the-app-port")
-				Expect(err).NotTo(HaveOccurred())
-
-				reqs, err = cmd.Requirements(requirementsFactory, flagContext)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
-			It("returns a minAPIVersionRequirement", func() {
-				Expect(requirementsFactory.NewMinAPIVersionRequirementCallCount()).To(Equal(1))
-
-				option, version := requirementsFactory.NewMinAPIVersionRequirementArgsForCall(0)
-				Expect(option).To(Equal("Option '--app-ports'"))
-				Expect(version).To(Equal(cf.MultipleAppPortsMinimumAPIVersion))
-
-				Expect(reqs).To(ContainElement(minVersionReq))
-			})
 		})
 	})
 
@@ -743,7 +702,6 @@ var _ = Describe("Push Command", func() {
 										"stack":             "custom-stack",
 										"timeout":           360,
 										"health-check-type": "none",
-										"app-ports":         []interface{}{3000},
 										"buildpack":         "some-buildpack",
 										"command":           `JAVA_HOME=$PWD/.openjdk JAVA_OPTS="-Xss995K" ./bin/start.sh run`,
 										"path":              filepath.Clean("some/path/from/manifest"),
@@ -769,7 +727,6 @@ var _ = Describe("Push Command", func() {
 							"-s", "customLinux",
 							"-t", "1",
 							"-u", "port",
-							"--app-ports", "8080,9000",
 							"--no-start",
 							"app-name",
 						}
@@ -792,21 +749,7 @@ var _ = Describe("Push Command", func() {
 						Expect(*appParam.HealthCheckTimeout).To(Equal(1))
 						Expect(*appParam.HealthCheckType).To(Equal("port"))
 						Expect(*appParam.BuildpackURL).To(Equal("https://github.com/heroku/heroku-buildpack-play.git"))
-						Expect(*appParam.AppPorts).To(Equal([]int{8080, 9000}))
 						Expect(*appParam.HealthCheckTimeout).To(Equal(1))
-					})
-				})
-
-				Context("when an invalid app port is porvided", func() {
-					BeforeEach(func() {
-						args = []string{"--app-ports", "8080abc", "app-name"}
-					})
-
-					It("returns an error", func() {
-						Expect(executeErr).To(HaveOccurred())
-
-						Expect(executeErr.Error()).To(ContainSubstring("Invalid app port: 8080abc"))
-						Expect(executeErr.Error()).To(ContainSubstring("App port must be a number"))
 					})
 				})
 
@@ -814,14 +757,6 @@ var _ = Describe("Push Command", func() {
 					BeforeEach(func() {
 						deps.UI = uiWithContents
 						args = []string{"testApp", "--docker-image", "sample/dockerImage"}
-					})
-
-					It("sets diego to true", func() {
-						Expect(executeErr).NotTo(HaveOccurred())
-
-						Expect(appRepo.CreateCallCount()).To(Equal(1))
-						params := appRepo.CreateArgsForCall(0)
-						Expect(*params.Diego).To(BeTrue())
 					})
 
 					It("sets docker_image", func() {
@@ -1136,8 +1071,8 @@ var _ = Describe("Push Command", func() {
 							deps.UI = uiWithContents
 
 							expectedDomain = models.DomainFields{
-								GUID: "some-guid",
-								Name: "some-name",
+								GUID:                   "some-guid",
+								Name:                   "some-name",
 								OwningOrganizationGUID: "some-organization-guid",
 								RouterGroupGUID:        "some-router-group-guid",
 								RouterGroupType:        "tcp",

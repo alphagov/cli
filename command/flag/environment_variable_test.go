@@ -43,20 +43,20 @@ var _ = Describe("EnvironmentVariable", func() {
 	})
 
 	Describe("Complete", func() {
-		Context("when the prefix is empty", func() {
+		When("the prefix is empty", func() {
 			It("returns no matches", func() {
 				Expect(envVar.Complete("")).To(BeEmpty())
 			})
 		})
 
-		Context("when the prefix does not start with $", func() {
+		When("the prefix does not start with $", func() {
 			It("returns no matches", func() {
 				Expect(envVar.Complete("A$A")).To(BeEmpty())
 			})
 		})
 
-		Context("when the prefix starts with $", func() {
-			Context("when only $ is specified", func() {
+		When("the prefix starts with $", func() {
+			When("only $ is specified", func() {
 				It("returns all environment variables", func() {
 					keyValPairs := os.Environ()
 					envVars := make([]string, len(keyValPairs))
@@ -72,8 +72,8 @@ var _ = Describe("EnvironmentVariable", func() {
 				})
 			})
 
-			Context("when additional characters are specified", func() {
-				Context("when there are matching environment variables", func() {
+			When("additional characters are specified", func() {
+				When("there are matching environment variables", func() {
 					It("returns the matching environment variables", func() {
 						matches := envVar.Complete("$ENVIRONMENTVARIABLE_TEST_A")
 						Expect(matches).To(HaveLen(2))
@@ -92,7 +92,7 @@ var _ = Describe("EnvironmentVariable", func() {
 					})
 				})
 
-				Context("when there are no matching environment variables", func() {
+				When("there are no matching environment variables", func() {
 					It("returns no matches", func() {
 						Expect(envVar.Complete("$ZZZZ")).To(BeEmpty())
 					})
@@ -102,7 +102,10 @@ var _ = Describe("EnvironmentVariable", func() {
 	})
 
 	Describe("UnmarshalFlag", func() {
-		var rawFlagValue string
+		var (
+			rawFlagValue string
+			executeErr   error
+		)
 
 		BeforeEach(func() {
 			envVar = ""
@@ -110,22 +113,24 @@ var _ = Describe("EnvironmentVariable", func() {
 		})
 
 		JustBeforeEach(func() {
-			_ = envVar.UnmarshalFlag(rawFlagValue)
+			executeErr = envVar.UnmarshalFlag(rawFlagValue)
 		})
 
-		Context("when the env variable value prefix starts with the WorkAroundPrefix", func() {
+		When("the env variable value prefix starts with the WorkAroundPrefix", func() {
 			BeforeEach(func() {
 				rawFlagValue = WorkAroundPrefix + "SOME_FLAG"
 			})
 
 			It("removes the WorkAroundPrefix", func() {
+				Expect(executeErr).NotTo(HaveOccurred())
 				Expect(string(envVar)).ToNot(ContainSubstring(WorkAroundPrefix))
 				Expect(string(envVar)).To(Equal("SOME_FLAG"))
 			})
 		})
 
-		Context("when the env variable value does not start with the WorkAroundPrefix", func() {
+		When("the env variable value does not start with the WorkAroundPrefix", func() {
 			It("unmarshals the value with no error", func() {
+				Expect(executeErr).NotTo(HaveOccurred())
 				Expect(string(envVar)).To(Equal("SOME_FLAG"))
 			})
 		})

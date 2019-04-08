@@ -29,57 +29,6 @@ var _ = Describe("UI", func() {
 		ui.Err = NewBuffer()
 	})
 
-	Describe("DisplayKeyValueTableForV3App", func() {
-		Context("when the app is running properly", func() {
-			BeforeEach(func() {
-				ui.DisplayKeyValueTableForV3App([][]string{
-					{"name:", "dora"},
-					{"requested state:", "started"},
-					{"processes:", "web:1/1,worker:2/2"}},
-					[]string{},
-				)
-			})
-
-			It("displays a table with the no change in coloring", func() {
-				Expect(ui.Out).To(Say("name:              dora\n"))
-				Expect(ui.Out).To(Say("requested state:   started\n"))
-				Expect(ui.Out).To(Say("processes:         web:1/1,worker:2/2\n"))
-			})
-		})
-
-		Context("when the app is stopped and has 0 instances", func() {
-			BeforeEach(func() {
-				ui.DisplayKeyValueTableForV3App([][]string{
-					{"name:", "dora"},
-					{"requested state:", "stopped"},
-					{"processes:", "web:1/1,worker:2/2"}},
-					[]string{})
-			})
-
-			It("displays a table with the no change in coloring", func() {
-				Expect(ui.Out).To(Say("name:              dora\n"))
-				Expect(ui.Out).To(Say("requested state:   stopped\n"))
-				Expect(ui.Out).To(Say("processes:         web:1/1,worker:2/2\n"))
-			})
-		})
-
-		Context("when the app is started and has 1 crashed process", func() {
-			BeforeEach(func() {
-				ui.DisplayKeyValueTableForV3App([][]string{
-					{"name:", "dora"},
-					{"requested state:", "started"},
-					{"processes:", "web:0/1,worker:2/2"}},
-					[]string{"web"})
-			})
-
-			It("displays a table with requested state and crashed instance count in red", func() {
-				Expect(ui.Out).To(Say("name:              dora\n"))
-				Expect(ui.Out).To(Say("requested state:   \x1b\\[31;1mstarted\x1b\\[0m\n"))
-				Expect(ui.Out).To(Say("processes:         \x1b\\[31;1mweb:0/1\x1b\\[0m,worker:2/2\n"))
-			})
-		})
-	})
-
 	Describe("DisplayInstancesTableForApp", func() {
 		Context("in english", func() {
 			It("displays a table with red coloring for down and crashed", func() {
@@ -91,7 +40,7 @@ var _ = Describe("UI", func() {
 				})
 
 				Expect(ui.Out).To(Say("\x1b\\[1mheader1\x1b\\[0m\\s+\x1b\\[1mheader2\x1b\\[0m\\s+\x1b\\[1mheader3\x1b\\[0m")) // Makes sure empty values are not bolded
-				Expect(ui.Out).To(Say("#0\\s+starting\\s+val1\\s+val2"))
+				Expect(ui.Out).To(Say(`#0\s+starting\s+val1\s+val2`))
 				Expect(ui.Out).To(Say("#1\\s+\x1b\\[31;1mdown\x1b\\[0m\\s+val1\\s+val2"))
 				Expect(ui.Out).To(Say("#2\\s+\x1b\\[31;1mcrashed\x1b\\[0m\\s+val1\\s+val2"))
 			})
@@ -117,7 +66,7 @@ var _ = Describe("UI", func() {
 				})
 
 				Expect(ui.Out).To(Say("\x1b\\[1mheader1\x1b\\[0m\\s+\x1b\\[1mheader2\x1b\\[0m\\s+\x1b\\[1mheader3\x1b\\[0m")) // Makes sure empty values are not bolded
-				Expect(ui.Out).To(Say("#0\\s+%s\\s+val1\\s+val2", ui.TranslateText("starting")))
+				Expect(ui.Out).To(Say(`#0\s+%s\s+val1\s+val2`, ui.TranslateText("starting")))
 				Expect(ui.Out).To(Say("#1\\s+\x1b\\[31;1m%s\x1b\\[0m\\s+val1\\s+val2", ui.TranslateText("down")))
 				Expect(ui.Out).To(Say("#2\\s+\x1b\\[31;1m%s\x1b\\[0m\\s+val1\\s+val2", ui.TranslateText("crashed")))
 			})
@@ -125,7 +74,7 @@ var _ = Describe("UI", func() {
 	})
 
 	Describe("DisplayKeyValueTableForApp", func() {
-		Context("when the app is running properly", func() {
+		When("the app is running properly", func() {
 			BeforeEach(func() {
 				ui.DisplayKeyValueTableForApp([][]string{
 					{"name:", "dora"},
@@ -141,7 +90,7 @@ var _ = Describe("UI", func() {
 			})
 		})
 
-		Context("when the app is stopped and has 0 instances", func() {
+		When("the app is stopped and has 0 instances", func() {
 			Context("in english", func() {
 				BeforeEach(func() {
 					ui.DisplayKeyValueTableForApp([][]string{
@@ -183,7 +132,7 @@ var _ = Describe("UI", func() {
 			})
 		})
 
-		Context("when the app is not stopped and has 0 instances", func() {
+		When("the app is not stopped and has 0 instances", func() {
 			Context("in english", func() {
 				BeforeEach(func() {
 					ui.DisplayKeyValueTableForApp([][]string{

@@ -1,12 +1,14 @@
 package helpers
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"code.cloudfoundry.org/cli/util/configv3"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
@@ -18,6 +20,18 @@ func TurnOnExperimental() {
 	Expect(os.Setenv("CF_CLI_EXPERIMENTAL", "true")).To(Succeed())
 }
 
+func TurnOffExperimental() {
+	Expect(os.Unsetenv("CF_CLI_EXPERIMENTAL")).To(Succeed())
+}
+
+func TurnOnExperimentalLogin() {
+	Expect(os.Setenv("CF_EXPERIMENTAL_LOGIN", "true")).To(Succeed())
+}
+
+func TurnOffExperimentalLogin() {
+	Expect(os.Unsetenv("CF_EXPERIMENTAL_LOGIN")).To(Succeed())
+}
+
 func SetHomeDir() string {
 	var err error
 	homeDir, err := ioutil.TempDir("", "cli-integration-test")
@@ -25,6 +39,8 @@ func SetHomeDir() string {
 
 	Expect(os.Setenv("CF_HOME", homeDir)).To(Succeed())
 	Expect(os.Setenv("CF_PLUGIN_HOME", homeDir)).To(Succeed())
+
+	GinkgoWriter.Write([]byte(fmt.Sprintln("\nHOME DIR>", homeDir)))
 	return homeDir
 }
 

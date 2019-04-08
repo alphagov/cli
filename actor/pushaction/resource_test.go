@@ -23,9 +23,7 @@ var _ = Describe("Resources", func() {
 	)
 
 	BeforeEach(func() {
-		fakeV2Actor = new(pushactionfakes.FakeV2Actor)
-		fakeSharedActor = new(pushactionfakes.FakeSharedActor)
-		actor = NewActor(fakeV2Actor, nil, fakeSharedActor)
+		actor, fakeV2Actor, _, fakeSharedActor = getTestPushActor()
 	})
 
 	Describe("CreateArchive", func() {
@@ -55,12 +53,12 @@ var _ = Describe("Resources", func() {
 			archivePath, executeErr = actor.CreateArchive(config)
 		})
 
-		Context("when the source is an archive", func() {
+		When("the source is an archive", func() {
 			BeforeEach(func() {
 				config.Archive = true
 			})
 
-			Context("when the zipping is successful", func() {
+			When("the zipping is successful", func() {
 				var fakeArchivePath string
 
 				BeforeEach(func() {
@@ -81,7 +79,7 @@ var _ = Describe("Resources", func() {
 				})
 			})
 
-			Context("when creating the archive errors", func() {
+			When("creating the archive errors", func() {
 				var expectedErr error
 
 				BeforeEach(func() {
@@ -95,8 +93,8 @@ var _ = Describe("Resources", func() {
 			})
 		})
 
-		Context("when the source is a directory", func() {
-			Context("when the zipping is successful", func() {
+		When("the source is a directory", func() {
+			When("the zipping is successful", func() {
 				var fakeArchivePath string
 				BeforeEach(func() {
 					fakeArchivePath = "some-archive-path"
@@ -115,7 +113,7 @@ var _ = Describe("Resources", func() {
 				})
 			})
 
-			Context("when creating the archive errors", func() {
+			When("creating the archive errors", func() {
 				var expectedErr error
 
 				BeforeEach(func() {
@@ -147,7 +145,7 @@ var _ = Describe("Resources", func() {
 			}
 		})
 
-		Context("when the resource matching is successful", func() {
+		When("the resource matching is successful", func() {
 			BeforeEach(func() {
 				fakeV2Actor.ResourceMatchReturns(
 					[]v2action.Resource{{Filename: "file-1"}},
@@ -165,7 +163,7 @@ var _ = Describe("Resources", func() {
 			})
 		})
 
-		Context("when resource matching returns an error", func() {
+		When("resource matching returns an error", func() {
 			BeforeEach(func() {
 				fakeV2Actor.ResourceMatchReturns(nil, nil, v2action.Warnings{"warning-1"}, errors.New("some-error"))
 			})
@@ -207,7 +205,7 @@ var _ = Describe("Resources", func() {
 			warnings, executeErr = actor.UploadPackage(config)
 		})
 
-		Context("when the upload is successful", func() {
+		When("the upload is successful", func() {
 			var uploadJob v2action.Job
 
 			BeforeEach(func() {
@@ -215,7 +213,7 @@ var _ = Describe("Resources", func() {
 				fakeV2Actor.UploadApplicationPackageReturns(uploadJob, v2action.Warnings{"upload-warning-1", "upload-warning-2"}, nil)
 			})
 
-			Context("when polling is successful", func() {
+			When("polling is successful", func() {
 				BeforeEach(func() {
 					fakeV2Actor.PollJobReturns(v2action.Warnings{"poll-warning-1", "poll-warning-2"}, nil)
 				})
@@ -236,7 +234,7 @@ var _ = Describe("Resources", func() {
 				})
 			})
 
-			Context("when the polling fails", func() {
+			When("the polling fails", func() {
 				var expectedErr error
 
 				BeforeEach(func() {
@@ -251,7 +249,7 @@ var _ = Describe("Resources", func() {
 			})
 		})
 
-		Context("when the upload errors", func() {
+		When("the upload errors", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -304,7 +302,7 @@ var _ = Describe("Resources", func() {
 			warnings, executeErr = actor.UploadPackageWithArchive(config, archivePath, fakeProgressBar, eventStream)
 		})
 
-		Context("when the archive can be accessed properly", func() {
+		When("the archive can be accessed properly", func() {
 			BeforeEach(func() {
 				tmpfile, err := ioutil.TempFile("", "fake-archive")
 				Expect(err).ToNot(HaveOccurred())
@@ -319,7 +317,7 @@ var _ = Describe("Resources", func() {
 				Expect(os.Remove(archivePath)).ToNot(HaveOccurred())
 			})
 
-			Context("when the upload is successful", func() {
+			When("the upload is successful", func() {
 				var (
 					progressBarReader io.Reader
 					uploadJob         v2action.Job
@@ -340,7 +338,7 @@ var _ = Describe("Resources", func() {
 					}()
 				})
 
-				Context("when the polling is successful", func() {
+				When("the polling is successful", func() {
 					BeforeEach(func() {
 						fakeV2Actor.PollJobReturns(v2action.Warnings{"poll-warning-1", "poll-warning-2"}, nil)
 					})
@@ -368,7 +366,7 @@ var _ = Describe("Resources", func() {
 					})
 				})
 
-				Context("when the polling fails", func() {
+				When("the polling fails", func() {
 					var expectedErr error
 
 					BeforeEach(func() {
@@ -383,7 +381,7 @@ var _ = Describe("Resources", func() {
 				})
 			})
 
-			Context("when the upload errors", func() {
+			When("the upload errors", func() {
 				var (
 					expectedErr error
 					done        chan bool
@@ -416,7 +414,7 @@ var _ = Describe("Resources", func() {
 			})
 		})
 
-		Context("when the archive returns any access errors", func() {
+		When("the archive returns any access errors", func() {
 			It("returns the error", func() {
 				_, ok := executeErr.(*os.PathError)
 				Expect(ok).To(BeTrue())
@@ -454,7 +452,7 @@ var _ = Describe("Resources", func() {
 			warnings, executeErr = actor.UploadDroplet(config, dropletPath, fakeProgressBar, eventStream)
 		})
 
-		Context("when the droplet can be accessed properly", func() {
+		When("the droplet can be accessed properly", func() {
 			BeforeEach(func() {
 				tmpfile, err := ioutil.TempFile("", "fake-droplet")
 				Expect(err).ToNot(HaveOccurred())
@@ -469,7 +467,7 @@ var _ = Describe("Resources", func() {
 				Expect(os.RemoveAll(dropletPath)).ToNot(HaveOccurred())
 			})
 
-			Context("when the upload is successful", func() {
+			When("the upload is successful", func() {
 				var (
 					progressBarReader io.Reader
 					uploadJob         v2action.Job
@@ -489,7 +487,7 @@ var _ = Describe("Resources", func() {
 					}()
 				})
 
-				Context("when the polling is successful", func() {
+				When("the polling is successful", func() {
 					BeforeEach(func() {
 						fakeV2Actor.PollJobReturns(v2action.Warnings{"poll-warning-1", "poll-warning-2"}, nil)
 					})
@@ -516,7 +514,7 @@ var _ = Describe("Resources", func() {
 					})
 				})
 
-				Context("when the polling fails", func() {
+				When("the polling fails", func() {
 					var expectedErr error
 
 					BeforeEach(func() {
@@ -531,7 +529,7 @@ var _ = Describe("Resources", func() {
 				})
 			})
 
-			Context("when the upload errors", func() {
+			When("the upload errors", func() {
 				var (
 					expectedErr error
 					done        chan bool

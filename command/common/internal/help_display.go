@@ -54,7 +54,7 @@ func ConvertPluginToCommandInfo(plugin configv3.PluginCommand) sharedaction.Comm
 
 func LongestCommandName(cmds map[string]sharedaction.CommandInfo, pluginCmds []configv3.PluginCommand) int {
 	longest := 0
-	for name, _ := range cmds {
+	for name := range cmds {
 		if len(name) > longest {
 			longest = len(name)
 		}
@@ -70,17 +70,22 @@ func LongestCommandName(cmds map[string]sharedaction.CommandInfo, pluginCmds []c
 func LongestFlagWidth(flags []sharedaction.CommandFlag) int {
 	longest := 0
 	for _, flag := range flags {
-		var name string
-		if flag.Short != "" && flag.Long != "" {
-			name = fmt.Sprintf("--%s, -%s", flag.Long, flag.Short)
-		} else if flag.Short != "" {
-			name = "-" + flag.Short
-		} else {
-			name = "--" + flag.Long
-		}
+		name := FlagWithHyphens(flag)
+
 		if len(name) > longest {
 			longest = len(name)
 		}
 	}
 	return longest
+}
+
+func FlagWithHyphens(flag sharedaction.CommandFlag) string {
+	switch {
+	case flag.Short != "" && flag.Long != "":
+		return fmt.Sprintf("--%s, -%s", flag.Long, flag.Short)
+	case flag.Short != "":
+		return "-" + flag.Short
+	default:
+		return "--" + flag.Long
+	}
 }

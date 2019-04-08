@@ -28,12 +28,12 @@ var _ = Describe("Service Instance Summary Actions", func() {
 		var summary ServiceInstanceSummary
 
 		Describe("IsShareable", func() {
-			Context("when the 'service_instance_sharing' feature flag is enabled", func() {
+			When("the 'service_instance_sharing' feature flag is enabled", func() {
 				BeforeEach(func() {
 					summary.ServiceInstanceSharingFeatureFlag = true
 				})
 
-				Context("when the service broker has enabled sharing", func() {
+				When("the service broker has enabled sharing", func() {
 					BeforeEach(func() {
 						summary.Service.Extra.Shareable = true
 					})
@@ -43,7 +43,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 					})
 				})
 
-				Context("when the service broker has not enabled sharing", func() {
+				When("the service broker has not enabled sharing", func() {
 					BeforeEach(func() {
 						summary.Service.Extra.Shareable = false
 					})
@@ -54,12 +54,12 @@ var _ = Describe("Service Instance Summary Actions", func() {
 				})
 			})
 
-			Context("when the 'service_instance_sharing' feature flag is not enabled", func() {
+			When("the 'service_instance_sharing' feature flag is not enabled", func() {
 				BeforeEach(func() {
 					summary.ServiceInstanceSharingFeatureFlag = false
 				})
 
-				Context("when the service broker has enabled sharing", func() {
+				When("the service broker has enabled sharing", func() {
 					BeforeEach(func() {
 						summary.Service.Extra.Shareable = true
 					})
@@ -69,7 +69,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 					})
 				})
 
-				Context("when the service broker has not enabled sharing", func() {
+				When("the service broker has not enabled sharing", func() {
 					BeforeEach(func() {
 						summary.Service.Extra.Shareable = false
 					})
@@ -93,7 +93,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 			summary, summaryWarnings, summaryErr = actor.GetServiceInstanceSummaryByNameAndSpace("some-service-instance", "some-space-guid")
 		})
 
-		Context("when an error is encountered getting the service instance", func() {
+		When("an error is encountered getting the service instance", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -121,13 +121,13 @@ var _ = Describe("Service Instance Summary Actions", func() {
 			})
 		})
 
-		Context("when no errors are encountered getting the service instance", func() {
+		When("no errors are encountered getting the service instance", func() {
 			var (
 				returnedServiceInstance ccv2.ServiceInstance
 				returnedFeatureFlag     ccv2.FeatureFlag
 			)
 
-			Context("when the service instance is a managed service instance", func() {
+			When("the service instance is a managed service instance", func() {
 				BeforeEach(func() {
 					returnedServiceInstance = ccv2.ServiceInstance{
 						DashboardURL:    "some-dashboard",
@@ -170,8 +170,8 @@ var _ = Describe("Service Instance Summary Actions", func() {
 					}))
 				})
 
-				Context("when the service instance is shared from another space (not created in the currently targeted space)", func() {
-					Context("when the source space of the service instance is different from the currently targeted space", func() {
+				When("the service instance is shared from another space (not created in the currently targeted space)", func() {
+					When("the source space of the service instance is different from the currently targeted space", func() {
 						BeforeEach(func() {
 							returnedServiceInstance.SpaceGUID = "not-currently-targeted-space-guid"
 							fakeCloudControllerClient.GetSpaceServiceInstancesReturns(
@@ -180,10 +180,10 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								nil)
 						})
 
-						Context("when an error is encountered getting the shared_from information", func() {
+						When("an error is encountered getting the shared_from information", func() {
 							var expectedErr error
 
-							Context("when the error is generic", func() {
+							When("the error is generic", func() {
 								BeforeEach(func() {
 									expectedErr = errors.New("get-service-instance-shared-from-error")
 									fakeCloudControllerClient.GetServiceInstanceSharedFromReturns(
@@ -203,7 +203,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								})
 							})
 
-							Context("when the API version does not support service instance sharing", func() {
+							When("the API version does not support service instance sharing", func() {
 								BeforeEach(func() {
 									expectedErr = ccerror.ResourceNotFoundError{}
 									fakeCloudControllerClient.GetServiceInstanceSharedFromReturns(
@@ -224,8 +224,8 @@ var _ = Describe("Service Instance Summary Actions", func() {
 							})
 						})
 
-						Context("when no errors are encountered getting the shared_from information", func() {
-							Context("when the shared_from info is NOT empty", func() {
+						When("no errors are encountered getting the shared_from information", func() {
+							When("the shared_from info is NOT empty", func() {
 								var returnedServiceSharedFrom ccv2.ServiceInstanceSharedFrom
 
 								BeforeEach(func() {
@@ -256,7 +256,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								})
 							})
 
-							Context("when the shared_from info is empty", func() {
+							When("the shared_from info is empty", func() {
 								It("sets the share type to not shared", func() {
 									Expect(summaryErr).ToNot(HaveOccurred())
 									Expect(summary.ServiceInstanceShareType).To(Equal(ServiceInstanceIsNotShared))
@@ -265,7 +265,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 						})
 					})
 
-					Context("when the source space of the service instance is 'null'", func() {
+					When("the source space of the service instance is 'null'", func() {
 						BeforeEach(func() {
 							// API returns a json null value that is unmarshalled into the empty string
 							returnedServiceInstance.SpaceGUID = ""
@@ -275,10 +275,10 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								nil)
 						})
 
-						Context("when an error is encountered getting the shared_from information", func() {
+						When("an error is encountered getting the shared_from information", func() {
 							var expectedErr error
 
-							Context("when the error is generic", func() {
+							When("the error is generic", func() {
 								BeforeEach(func() {
 									expectedErr = errors.New("get-service-instance-shared-from-error")
 									fakeCloudControllerClient.GetServiceInstanceSharedFromReturns(
@@ -296,7 +296,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								})
 							})
 
-							Context("when the API version does not support service instance sharing", func() {
+							When("the API version does not support service instance sharing", func() {
 								BeforeEach(func() {
 									expectedErr = ccerror.ResourceNotFoundError{}
 									fakeCloudControllerClient.GetServiceInstanceSharedFromReturns(
@@ -316,8 +316,8 @@ var _ = Describe("Service Instance Summary Actions", func() {
 							})
 						})
 
-						Context("when no errors are encountered getting the shared_from information", func() {
-							Context("when the shared_from info is NOT empty", func() {
+						When("no errors are encountered getting the shared_from information", func() {
+							When("the shared_from info is NOT empty", func() {
 								var returnedServiceSharedFrom ccv2.ServiceInstanceSharedFrom
 
 								BeforeEach(func() {
@@ -348,7 +348,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								})
 							})
 
-							Context("when the shared_from info is empty", func() {
+							When("the shared_from info is empty", func() {
 								It("sets the share type to not shared", func() {
 									Expect(summaryErr).ToNot(HaveOccurred())
 									Expect(summary.ServiceInstanceShareType).To(Equal(ServiceInstanceIsNotShared))
@@ -358,8 +358,8 @@ var _ = Describe("Service Instance Summary Actions", func() {
 					})
 				})
 
-				Context("when the service instance is shared to other spaces", func() {
-					Context("when the source space of the service instance is the same as the currently targeted space", func() {
+				When("the service instance is shared to other spaces", func() {
+					When("the source space of the service instance is the same as the currently targeted space", func() {
 						BeforeEach(func() {
 							returnedServiceInstance.SpaceGUID = "some-space-guid"
 							fakeCloudControllerClient.GetSpaceServiceInstancesReturns(
@@ -368,10 +368,10 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								nil)
 						})
 
-						Context("when an error is encountered getting the shared_to information", func() {
+						When("an error is encountered getting the shared_to information", func() {
 							var expectedErr error
 
-							Context("when the error is generic", func() {
+							When("the error is generic", func() {
 								BeforeEach(func() {
 									expectedErr = errors.New("get-service-instance-shared-tos-error")
 									fakeCloudControllerClient.GetServiceInstanceSharedTosReturns(
@@ -390,7 +390,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								})
 							})
 
-							Context("when the API version does not support service instance sharing", func() {
+							When("the API version does not support service instance sharing", func() {
 								BeforeEach(func() {
 									expectedErr = ccerror.ResourceNotFoundError{}
 									fakeCloudControllerClient.GetServiceInstanceSharedTosReturns(
@@ -410,8 +410,8 @@ var _ = Describe("Service Instance Summary Actions", func() {
 							})
 						})
 
-						Context("when no errors are encountered getting the shared_to information", func() {
-							Context("when the shared_to info is NOT an empty list", func() {
+						When("no errors are encountered getting the shared_to information", func() {
+							When("the shared_to info is NOT an empty list", func() {
 								var returnedServiceSharedTos []ccv2.ServiceInstanceSharedTo
 
 								BeforeEach(func() {
@@ -450,7 +450,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								})
 							})
 
-							Context("when the shared_to info is an empty list", func() {
+							When("the shared_to info is an empty list", func() {
 								It("sets the share type to not shared", func() {
 									Expect(summaryErr).ToNot(HaveOccurred())
 									Expect(summary.ServiceInstanceShareType).To(Equal(ServiceInstanceIsNotShared))
@@ -460,7 +460,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 					})
 				})
 
-				Context("when an error is encountered getting the service plan", func() {
+				When("an error is encountered getting the service plan", func() {
 					Describe("a generic error", func() {
 						var expectedErr error
 
@@ -479,10 +479,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 					})
 
 					Describe("a Forbidden error", func() {
-						var expectedErr error
-
 						BeforeEach(func() {
-							expectedErr = errors.New("get-service-plan-error")
 							fakeCloudControllerClient.GetServicePlanReturns(
 								ccv2.ServicePlan{},
 								ccv2.Warnings{"get-service-plan-warning"},
@@ -499,7 +496,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 					})
 				})
 
-				Context("when no errors are encountered getting the service plan", func() {
+				When("no errors are encountered getting the service plan", func() {
 					var returnedServicePlan ccv2.ServicePlan
 
 					BeforeEach(func() {
@@ -524,7 +521,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 						Expect(fakeCloudControllerClient.GetServicePlanArgsForCall(0)).To(Equal(returnedServiceInstance.ServicePlanGUID))
 					})
 
-					Context("when an error is encountered getting the service", func() {
+					When("an error is encountered getting the service", func() {
 						Describe("a generic error", func() {
 							var expectedErr error
 
@@ -562,7 +559,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 						})
 					})
 
-					Context("when no errors are encountered getting the service", func() {
+					When("no errors are encountered getting the service", func() {
 						var returnedService ccv2.Service
 
 						BeforeEach(func() {
@@ -593,7 +590,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 							Expect(fakeCloudControllerClient.GetServiceArgsForCall(0)).To(Equal(returnedServicePlan.ServiceGUID))
 						})
 
-						Context("when an error is encountered getting the service bindings", func() {
+						When("an error is encountered getting the service bindings", func() {
 							var expectedErr error
 
 							BeforeEach(func() {
@@ -613,20 +610,22 @@ var _ = Describe("Service Instance Summary Actions", func() {
 							})
 						})
 
-						Context("when no errors are encountered getting the service bindings", func() {
+						When("no errors are encountered getting the service bindings", func() {
 							var returnedServiceBindings []ccv2.ServiceBinding
 
 							BeforeEach(func() {
 								returnedServiceBindings = []ccv2.ServiceBinding{
 									{
-										GUID:    "some-service-binding-1-guid",
-										Name:    "some-service-binding-1",
-										AppGUID: "some-app-1-guid",
+										GUID:          "some-service-binding-1-guid",
+										Name:          "some-service-binding-1",
+										AppGUID:       "some-app-1-guid",
+										LastOperation: ccv2.LastOperation{Type: "create", State: constant.LastOperationInProgress, Description: "10% complete"},
 									},
 									{
-										GUID:    "some-service-binding-2-guid",
-										Name:    "some-service-binding-2",
-										AppGUID: "some-app-2-guid",
+										GUID:          "some-service-binding-2-guid",
+										Name:          "some-service-binding-2",
+										AppGUID:       "some-app-2-guid",
+										LastOperation: ccv2.LastOperation{Type: "delete", State: constant.LastOperationSucceeded, Description: "100% complete"},
 									},
 								}
 								fakeCloudControllerClient.GetServiceInstanceServiceBindingsReturns(
@@ -635,7 +634,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 									nil)
 							})
 
-							Context("when an error is encountered getting bound application info", func() {
+							When("an error is encountered getting bound application info", func() {
 								var expectedErr error
 
 								BeforeEach(func() {
@@ -655,7 +654,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 								})
 							})
 
-							Context("when no errors are encountered getting bound application info", func() {
+							When("no errors are encountered getting bound application info", func() {
 								BeforeEach(func() {
 									fakeCloudControllerClient.GetApplicationReturnsOnCall(
 										0,
@@ -684,10 +683,20 @@ var _ = Describe("Service Instance Summary Actions", func() {
 										{
 											AppName:            "some-app-1",
 											ServiceBindingName: "some-service-binding-1",
+											LastOperation: LastOperation{
+												Type:        "create",
+												State:       constant.LastOperationInProgress,
+												Description: "10% complete",
+											},
 										},
 										{
 											AppName:            "some-app-2",
 											ServiceBindingName: "some-service-binding-2",
+											LastOperation: LastOperation{
+												Type:        "delete",
+												State:       constant.LastOperationSucceeded,
+												Description: "100% complete",
+											},
 										},
 									}))
 									Expect(summaryWarnings).To(ConsistOf("get-space-service-instance-warning", "get-feature-flags-warning", "get-service-plan-warning", "get-service-warning", "get-service-bindings-warning", "get-application-warning-1", "get-application-warning-2"))
@@ -707,7 +716,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 				})
 			})
 
-			Context("when the service instance is a user provided service instance", func() {
+			When("the service instance is a user provided service instance", func() {
 				BeforeEach(func() {
 					returnedServiceInstance = ccv2.ServiceInstance{
 						GUID: "some-user-provided-service-instance-guid",
@@ -735,7 +744,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 					})
 				})
 
-				Context("when no errors are encountered getting the service bindings", func() {
+				When("no errors are encountered getting the service bindings", func() {
 					var returnedServiceBindings []ccv2.ServiceBinding
 
 					BeforeEach(func() {
@@ -757,7 +766,7 @@ var _ = Describe("Service Instance Summary Actions", func() {
 							nil)
 					})
 
-					Context("when no errors are encountered getting bound application info", func() {
+					When("no errors are encountered getting bound application info", func() {
 						BeforeEach(func() {
 							fakeCloudControllerClient.GetApplicationReturnsOnCall(
 								0,
@@ -833,12 +842,14 @@ var _ = Describe("Service Instance Summary Actions", func() {
 			serviceInstancesSummary, warnings, executeErr = actor.GetServiceInstancesSummaryBySpace("some-space-GUID")
 		})
 
-		Context("when an error is encountered getting a space's service instances", func() {
+		When("an error is encountered getting a space's summary", func() {
 			var expectedErr error
+
 			BeforeEach(func() {
-				expectedErr = errors.New("get by space service instance summary error")
-				fakeCloudControllerClient.GetSpaceServiceInstancesReturns(
-					[]ccv2.ServiceInstance{},
+				expectedErr = errors.New("summary error")
+
+				fakeCloudControllerClient.GetSpaceSummaryReturns(
+					ccv2.SpaceSummary{},
 					ccv2.Warnings{"get-by-space-service-instances-warning"},
 					expectedErr,
 				)
@@ -850,139 +861,117 @@ var _ = Describe("Service Instance Summary Actions", func() {
 			})
 		})
 
-		Context("when no errors are encountered getting a space's service instances", func() {
-			var (
-				serviceInstance1 ccv2.ServiceInstance
-				serviceInstance2 ccv2.ServiceInstance
-				application1     ccv2.Application
-				application2     ccv2.Application
-				bindings1        []ccv2.ServiceBinding
-				bindings2        []ccv2.ServiceBinding
-			)
-
+		When("no errors are encountered getting a space's summary", func() {
 			BeforeEach(func() {
-				serviceInstance1 = ccv2.ServiceInstance{
-					GUID:            "some-si-GUID-1",
-					Name:            "some-si-name-1",
-					ServiceGUID:     "some-service-GUID-1",
-					ServicePlanGUID: "some-si-sp-GUID-1",
-					Type:            constant.ServiceInstanceTypeManagedService,
-					LastOperation: ccv2.LastOperation{
-						Type:  "some-lo-type",
-						State: "some-lo-state",
-					},
-				}
-				serviceInstance2 = ccv2.ServiceInstance{
-					GUID:            "some-si-GUID-3",
-					Name:            "some-si-name-3",
-					ServiceGUID:     "some-service-GUID-3",
-					ServicePlanGUID: "some-si-sp-GUID-3",
-					Type:            constant.ServiceInstanceTypeUserProvidedService,
-					LastOperation: ccv2.LastOperation{
-						Type:  "some-lo-type",
-						State: "some-lo-state",
-					},
-				}
-
-				fakeCloudControllerClient.GetSpaceServiceInstancesReturns(
-					[]ccv2.ServiceInstance{serviceInstance2, serviceInstance1},
-					ccv2.Warnings{"get-by-space-service-instances-warning"},
-					nil)
-
-				bindings1 = []ccv2.ServiceBinding{
-					{
-						GUID:                "some-sb-GUID-1",
-						Name:                "some-service-binding-2",
-						AppGUID:             "2-app-GUID", // we are testing that the app name will be sorted alphanumerically
-						ServiceInstanceGUID: "some-si-GUID-1",
-					},
-					{
-						GUID:                "some-sb-GUID-2",
-						Name:                "some-service-binding-1",
-						AppGUID:             "1-app-GUID", // we are testing that the app name will be sorted alphanumerically
-						ServiceInstanceGUID: "some-si-GUID-3",
-					},
-				}
-				bindings2 = []ccv2.ServiceBinding{
-					{
-						GUID:                "some-sb-GUID-1",
-						Name:                "some-service-binding-1",
-						AppGUID:             "1-app-GUID",
-						ServiceInstanceGUID: "some-si-GUID-1",
-					},
-				}
-				fakeCloudControllerClient.GetServiceInstanceServiceBindingsReturns(
-					bindings1,
-					ccv2.Warnings{"some-bindings-warning"},
-					nil)
-				fakeCloudControllerClient.GetUserProvidedServiceInstanceServiceBindingsReturns(
-					bindings2,
-					ccv2.Warnings{"some-bindings-warning"},
-					nil)
-
-				application1 = ccv2.Application{Name: "1-app-name", GUID: "1-app-GUID"}
-				application2 = ccv2.Application{Name: "2-app-name", GUID: "2-app-GUID"}
-
-				fakeCloudControllerClient.GetApplicationStub = func(appGUID string) (ccv2.Application, ccv2.Warnings, error) {
-					switch appGUID {
-					case application1.GUID:
-						return application1, ccv2.Warnings{"some-get-app-warning"}, nil
-					case application2.GUID:
-						return application2, ccv2.Warnings{"some-get-app-warning"}, nil
-					default:
-						Fail("got an app guid that does not exist")
-					}
-
-					return ccv2.Application{}, nil, nil
-				}
-			})
-
-			It("returns the service instances summary with bound apps in alphanumeric sorted order and all warnings", func() {
-				Expect(executeErr).ToNot(HaveOccurred())
-				Expect(serviceInstancesSummary).To(Equal(
-					[]ServiceInstanceSummary{
+				fakeCloudControllerClient.GetServicesReturns(
+					[]ccv2.Service{
 						{
-							ServiceInstance: ServiceInstance(serviceInstance1),
-							BoundApplications: []BoundApplication{
-								{
-									AppName:            "1-app-name",
-									ServiceBindingName: "some-service-binding-1",
-								},
-								{
-									AppName:            "2-app-name",
-									ServiceBindingName: "some-service-binding-2",
-								},
-							},
+							GUID:              "service-guid-1",
+							Label:             "service-label",
+							ServiceBrokerName: "some-broker",
 						},
 						{
-							ServiceInstance: ServiceInstance(serviceInstance2),
-							BoundApplications: []BoundApplication{
-								{
-									AppName:            "1-app-name",
-									ServiceBindingName: "some-service-binding-1",
+							GUID:              "service-guid-2",
+							Label:             "service-label",
+							ServiceBrokerName: "other-broker",
+						},
+					},
+					ccv2.Warnings{"get-space-services-warning"},
+					nil,
+				)
+				fakeCloudControllerClient.GetSpaceSummaryReturns(
+					ccv2.SpaceSummary{
+						Name: "space-name",
+						Applications: []ccv2.SpaceSummaryApplication{
+							{
+								Name:         "1-app-name",
+								ServiceNames: []string{"managed-service-instance", "user-provided-service-instance"},
+							},
+							{
+								Name:         "2-app-name",
+								ServiceNames: []string{"managed-service-instance"},
+							},
+						},
+						ServiceInstances: []ccv2.SpaceSummaryServiceInstance{
+							{
+								Name: "managed-service-instance",
+								ServicePlan: ccv2.SpaceSummaryServicePlan{
+									GUID: "plan-guid",
+									Name: "simple-plan",
+									Service: ccv2.SpaceSummaryService{
+										GUID:              "service-guid-1",
+										Label:             "service-label",
+										ServiceBrokerName: "some-broker",
+									},
+								},
+								LastOperation: ccv2.LastOperation{
+									Type:        "create",
+									State:       "succeeded",
+									Description: "a description",
 								},
 							},
-						}}))
-				Expect(warnings).To(ConsistOf("get-by-space-service-instances-warning",
-					"some-get-app-warning", "some-get-app-warning", "some-get-app-warning",
-					"some-bindings-warning", "some-bindings-warning"))
+							{
+								Name: "user-provided-service-instance",
+							},
+						},
+					},
+					ccv2.Warnings{"get-space-summary-warning"},
+					nil,
+				)
+			})
 
-				Expect(fakeCloudControllerClient.GetSpaceServiceInstancesCallCount()).To(Equal(1))
-				passedSpaceGUID, includeUPS, filters := fakeCloudControllerClient.GetSpaceServiceInstancesArgsForCall(0)
-				Expect(passedSpaceGUID).To(Equal("some-space-GUID"))
-				Expect(includeUPS).To(BeTrue())
-				Expect(filters).To(BeEmpty())
+			It("returns the service instances summary with bound apps and all warnings", func() {
+				Expect(executeErr).NotTo(HaveOccurred())
+				Expect(warnings).To(ConsistOf("get-space-summary-warning", "get-space-services-warning"))
+				Expect(serviceInstancesSummary).To(Equal([]ServiceInstanceSummary{
+					{
+						ServiceInstance: ServiceInstance{
+							Name: "managed-service-instance",
+							Type: constant.ServiceInstanceTypeManagedService,
+							LastOperation: ccv2.LastOperation{
+								Type:        "create",
+								State:       "succeeded",
+								Description: "a description",
+							},
+						},
+						ServicePlan: ServicePlan{
+							Name: "simple-plan",
+						},
+						Service: Service{
+							Label:             "service-label",
+							ServiceBrokerName: "some-broker",
+						},
+						BoundApplications: []BoundApplication{
+							{AppName: "1-app-name"},
+							{AppName: "2-app-name"},
+						},
+					},
+					{
+						ServiceInstance: ServiceInstance{
+							Name: "user-provided-service-instance",
+							Type: constant.ServiceInstanceTypeUserProvidedService,
+						},
+						BoundApplications: []BoundApplication{
+							{AppName: "1-app-name"},
+						},
+					},
+				},
+				))
+			})
 
-				Expect(fakeCloudControllerClient.GetConfigFeatureFlagsCallCount()).To(Equal(0))
+			When("an error is encountered getting all services", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetServicesReturns(
+						[]ccv2.Service{},
+						ccv2.Warnings{"warning-1", "warning-2"},
+						errors.New("oops"),
+					)
+				})
 
-				//Managed expectations
-				Expect(fakeCloudControllerClient.GetServicePlanCallCount()).To(Equal(1))
-				Expect(fakeCloudControllerClient.GetServiceCallCount()).To(Equal(1))
-				Expect(fakeCloudControllerClient.GetServiceInstanceServiceBindingsCallCount()).To(Equal(1))
-				//User-Provided expectations
-				Expect(fakeCloudControllerClient.GetUserProvidedServiceInstanceServiceBindingsCallCount()).To(Equal(1))
-				//Both types expectations
-				Expect(fakeCloudControllerClient.GetApplicationCallCount()).To(Equal(3))
+				It("returns the error and all warnings", func() {
+					Expect(executeErr).To(MatchError(errors.New("oops")))
+					Expect(warnings).To(ConsistOf("get-space-summary-warning", "warning-1", "warning-2"))
+				})
 			})
 		})
 	})

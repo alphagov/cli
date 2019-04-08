@@ -4,7 +4,6 @@ import (
 	. "code.cloudfoundry.org/cli/actor/pushaction"
 	"code.cloudfoundry.org/cli/types"
 	"code.cloudfoundry.org/cli/util/manifest"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -23,15 +22,44 @@ var _ = Describe("CommandLineSettings", func() {
 		func(settings CommandLineSettings, input manifest.Application, output manifest.Application) {
 			Expect(settings.OverrideManifestSettings(input)).To(Equal(output))
 		},
-		Entry("overrides buildpack name",
-			CommandLineSettings{Buildpack: types.FilteredString{IsSet: true, Value: "sixpack"}},
+		Entry("single buildpack overrides single buildpack",
+			CommandLineSettings{Buildpacks: []string{"sixpack"}},
 			manifest.Application{Buildpack: types.FilteredString{IsSet: true, Value: "not-sixpack"}},
-			manifest.Application{Buildpack: types.FilteredString{IsSet: true, Value: "sixpack"}},
+			manifest.Application{Buildpack: types.FilteredString{IsSet: true, Value: "sixpack"}, Buildpacks: nil},
 		),
-		Entry("passes through buildpack name",
-			CommandLineSettings{Buildpack: types.FilteredString{IsSet: false, Value: ""}},
+		Entry("single buildpack overrides multiple buildpacks",
+			CommandLineSettings{Buildpacks: []string{"sixpack"}},
+			manifest.Application{Buildpacks: []string{"not-sixpack", "definitely-not-sixpack"}},
+			manifest.Application{Buildpack: types.FilteredString{IsSet: true, Value: "sixpack"}, Buildpacks: nil},
+		),
+		Entry("multiple buildpack overrides single buildpack",
+			CommandLineSettings{Buildpacks: []string{"sixpack", "sixpack2.0"}},
+			manifest.Application{Buildpack: types.FilteredString{IsSet: true, Value: "not-sixpack"}},
+			manifest.Application{
+				Buildpack:  types.FilteredString{},
+				Buildpacks: []string{"sixpack", "sixpack2.0"},
+			}),
+		Entry("multiple buildpack overrides multiple buildpacks",
+			CommandLineSettings{Buildpacks: []string{"sixpack", "sixpack2.0"}},
+			manifest.Application{Buildpacks: []string{"not-sixpack", "definitely-not-sixpack"}},
+			manifest.Application{
+				Buildpack:  types.FilteredString{},
+				Buildpacks: []string{"sixpack", "sixpack2.0"},
+			}),
+		Entry("passes through single buildpack",
+			CommandLineSettings{Buildpacks: nil},
 			manifest.Application{Buildpack: types.FilteredString{IsSet: true, Value: "not-sixpack"}},
 			manifest.Application{Buildpack: types.FilteredString{IsSet: true, Value: "not-sixpack"}},
+		),
+		Entry("passes through multiple buildpacks",
+			CommandLineSettings{Buildpacks: nil},
+			manifest.Application{Buildpacks: []string{"not-sixpack", "definitely-not-sixpack"}},
+			manifest.Application{Buildpacks: []string{"not-sixpack", "definitely-not-sixpack"}},
+		),
+		Entry("handles autodetect on single buildpack",
+			CommandLineSettings{Buildpacks: []string{"default"}},
+			manifest.Application{Buildpacks: []string{"not-sixpack", "definitely-not-sixpack"}},
+			manifest.Application{Buildpack: types.FilteredString{IsSet: true, Value: ""}},
 		),
 		Entry("overrides command",
 			CommandLineSettings{Command: types.FilteredString{IsSet: true, Value: "not-steve"}},
@@ -229,7 +257,7 @@ var _ = Describe("CommandLineSettings", func() {
 		})
 
 		Describe("name", func() {
-			Context("when the command line settings provides a name", func() {
+			When("the command line settings provides a name", func() {
 				BeforeEach(func() {
 					settings.Name = "not-steve"
 				})
@@ -239,7 +267,7 @@ var _ = Describe("CommandLineSettings", func() {
 				})
 			})
 
-			Context("when the command line settings name is blank", func() {
+			When("the command line settings name is blank", func() {
 				It("passes the manifest name through", func() {
 					Expect(output.Name).To(Equal("steve"))
 				})

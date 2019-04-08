@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"code.cloudfoundry.org/cli/cf"
 	"code.cloudfoundry.org/cli/cf/api"
 	"code.cloudfoundry.org/cli/cf/commandregistry"
 	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
@@ -67,13 +66,7 @@ func (cmd *UnbindRouteService) Requirements(requirementsFactory requirements.Fac
 	domainName := fc.Args()[0]
 	cmd.domainReq = requirementsFactory.NewDomainRequirement(domainName)
 
-	minAPIVersionRequirement := requirementsFactory.NewMinAPIVersionRequirement(
-		"unbind-route-service",
-		cf.MultipleAppPortsMinimumAPIVersion,
-	)
-
 	reqs := []requirements.Requirement{
-		minAPIVersionRequirement,
 		requirementsFactory.NewLoginRequirement(),
 		cmd.domainReq,
 		cmd.serviceInstanceReq,
@@ -109,7 +102,7 @@ func (cmd *UnbindRouteService) Execute(c flags.FlagContext) error {
 	if !confirmed {
 		confirmed = cmd.ui.Confirm(T("Unbinding may leave apps mapped to route {{.URL}} vulnerable; e.g. if service instance {{.ServiceInstanceName}} provides authentication. Do you want to proceed?",
 			map[string]interface{}{
-				"URL": route.URL(),
+				"URL":                 route.URL(),
 				"ServiceInstanceName": serviceInstance.Name,
 			}))
 
@@ -122,10 +115,10 @@ func (cmd *UnbindRouteService) Execute(c flags.FlagContext) error {
 	cmd.ui.Say(T("Unbinding route {{.URL}} from service instance {{.ServiceInstanceName}} in org {{.OrgName}} / space {{.SpaceName}} as {{.CurrentUser}}...",
 		map[string]interface{}{
 			"ServiceInstanceName": terminal.EntityNameColor(serviceInstance.Name),
-			"URL":         terminal.EntityNameColor(route.URL()),
-			"OrgName":     terminal.EntityNameColor(cmd.config.OrganizationFields().Name),
-			"SpaceName":   terminal.EntityNameColor(cmd.config.SpaceFields().Name),
-			"CurrentUser": terminal.EntityNameColor(cmd.config.Username()),
+			"URL":                 terminal.EntityNameColor(route.URL()),
+			"OrgName":             terminal.EntityNameColor(cmd.config.OrganizationFields().Name),
+			"SpaceName":           terminal.EntityNameColor(cmd.config.SpaceFields().Name),
+			"CurrentUser":         terminal.EntityNameColor(cmd.config.Username()),
 		}))
 
 	err = cmd.UnbindRoute(route, serviceInstance)

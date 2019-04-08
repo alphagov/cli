@@ -1,10 +1,8 @@
 package requirements
 
 import (
-	"code.cloudfoundry.org/cli/cf"
 	"code.cloudfoundry.org/cli/cf/api"
 	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
-	. "code.cloudfoundry.org/cli/cf/i18n"
 	"github.com/blang/semver"
 )
 
@@ -13,20 +11,20 @@ import (
 type Factory interface {
 	NewApplicationRequirement(name string) ApplicationRequirement
 	NewDEAApplicationRequirement(name string) DEAApplicationRequirement
-	NewDiegoApplicationRequirement(name string) DiegoApplicationRequirement
 	NewServiceInstanceRequirement(name string) ServiceInstanceRequirement
 	NewLoginRequirement() Requirement
-	NewRoutingAPIRequirement() Requirement
 	NewSpaceRequirement(name string) SpaceRequirement
 	NewTargetedSpaceRequirement() Requirement
 	NewTargetedOrgRequirement() TargetedOrgRequirement
 	NewOrganizationRequirement(name string) OrganizationRequirement
 	NewDomainRequirement(name string) DomainRequirement
 	NewUserRequirement(username string, wantGUID bool) UserRequirement
-	NewBuildpackRequirement(buildpack string) BuildpackRequirement
+	NewClientRequirement(username string) UserRequirement
+	NewBuildpackRequirement(buildpack, stack string) BuildpackRequirement
 	NewAPIEndpointRequirement() Requirement
 	NewMinAPIVersionRequirement(commandName string, requiredVersion semver.Version) Requirement
 	NewMaxAPIVersionRequirement(commandName string, maximumVersion semver.Version) Requirement
+	NewUnsupportedLegacyFlagRequirement(flags ...string) Requirement
 	NewUsageRequirement(Usable, string, func() bool) Requirement
 	NewNumberArguments([]string, ...string) Requirement
 }
@@ -54,13 +52,6 @@ func (f apiRequirementFactory) NewDEAApplicationRequirement(name string) DEAAppl
 	)
 }
 
-func (f apiRequirementFactory) NewDiegoApplicationRequirement(name string) DiegoApplicationRequirement {
-	return NewDiegoApplicationRequirement(
-		name,
-		f.repoLocator.GetApplicationRepository(),
-	)
-}
-
 func (f apiRequirementFactory) NewServiceInstanceRequirement(name string) ServiceInstanceRequirement {
 	return NewServiceInstanceRequirement(
 		name,
@@ -72,17 +63,6 @@ func (f apiRequirementFactory) NewLoginRequirement() Requirement {
 	return NewLoginRequirement(
 		f.config,
 	)
-}
-
-func (f apiRequirementFactory) NewRoutingAPIRequirement() Requirement {
-	req := Requirements{
-		f.NewMinAPIVersionRequirement(T("This command"), cf.TCPRoutingMinimumAPIVersion),
-		NewRoutingAPIRequirement(
-			f.config,
-		),
-	}
-
-	return req
 }
 
 func (f apiRequirementFactory) NewSpaceRequirement(name string) SpaceRequirement {
@@ -127,9 +107,17 @@ func (f apiRequirementFactory) NewUserRequirement(username string, wantGUID bool
 	)
 }
 
-func (f apiRequirementFactory) NewBuildpackRequirement(buildpack string) BuildpackRequirement {
+func (f apiRequirementFactory) NewClientRequirement(username string) UserRequirement {
+	return NewClientRequirement(
+		username,
+		f.repoLocator.GetClientRepository(),
+	)
+}
+
+func (f apiRequirementFactory) NewBuildpackRequirement(buildpack, stack string) BuildpackRequirement {
 	return NewBuildpackRequirement(
 		buildpack,
+		stack,
 		f.repoLocator.GetBuildpackRepository(),
 	)
 }
@@ -162,6 +150,10 @@ func (f apiRequirementFactory) NewMaxAPIVersionRequirement(commandName string, m
 		commandName,
 		maximumVersion,
 	)
+}
+
+func (f apiRequirementFactory) NewUnsupportedLegacyFlagRequirement(flags ...string) Requirement {
+	return NewUnsupportedLegacyFlagRequirement(flags)
 }
 
 func (f apiRequirementFactory) NewUsageRequirement(cmd Usable, errorMessage string, pred func() bool) Requirement {

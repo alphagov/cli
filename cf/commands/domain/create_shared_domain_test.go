@@ -8,13 +8,12 @@ import (
 	"code.cloudfoundry.org/cli/cf/flags"
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
-	"github.com/blang/semver"
 
 	"code.cloudfoundry.org/cli/cf/api/apifakes"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 
 	"code.cloudfoundry.org/cli/cf/commands/domain"
 	"code.cloudfoundry.org/cli/cf/models"
@@ -42,9 +41,7 @@ var _ = Describe("CreateSharedDomain", func() {
 		factory     *requirementsfakes.FakeFactory
 		flagContext flags.FlagContext
 
-		loginRequirement         requirements.Requirement
-		routingAPIRequirement    requirements.Requirement
-		minAPIVersionRequirement requirements.Requirement
+		loginRequirement requirements.Requirement
 
 		routerGroups models.RouterGroups
 	)
@@ -73,12 +70,6 @@ var _ = Describe("CreateSharedDomain", func() {
 
 		loginRequirement = &passingRequirement{Name: "Login"}
 		factory.NewLoginRequirementReturns(loginRequirement)
-
-		routingAPIRequirement = &passingRequirement{Name: "RoutingApi"}
-		factory.NewRoutingAPIRequirementReturns(routingAPIRequirement)
-
-		minAPIVersionRequirement = &passingRequirement{"MinAPIVersionRequirement"}
-		factory.NewMinAPIVersionRequirementReturns(minAPIVersionRequirement)
 
 		routingAPIRepo.ListRouterGroupsStub = func(cb func(models.RouterGroup) bool) error {
 			for _, r := range routerGroups {
@@ -128,54 +119,6 @@ var _ = Describe("CreateSharedDomain", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(factory.NewLoginRequirementCallCount()).To(Equal(1))
 				Expect(actualRequirements).To(ContainElement(loginRequirement))
-			})
-
-			It("does not return a RoutingAPIRequirement", func() {
-				actualRequirements, err := cmd.Requirements(factory, flagContext)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(factory.NewRoutingAPIRequirementCallCount()).To(Equal(0))
-				Expect(actualRequirements).ToNot(ContainElement(routingAPIRequirement))
-			})
-
-			It("does not return a MinAPIVersionRequirement", func() {
-				actualRequirements, err := cmd.Requirements(factory, flagContext)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(actualRequirements).NotTo(ContainElement(minAPIVersionRequirement))
-			})
-
-			Context("when router-group flag is set", func() {
-				BeforeEach(func() {
-					flagContext.Parse("domain-name", "--router-group", "route-group-name")
-				})
-
-				It("returns a LoginRequirement", func() {
-					actualRequirements, err := cmd.Requirements(factory, flagContext)
-					Expect(err).NotTo(HaveOccurred())
-					Expect(factory.NewLoginRequirementCallCount()).To(Equal(1))
-					Expect(actualRequirements).To(ContainElement(loginRequirement))
-				})
-
-				It("returns a RoutingAPIRequirement", func() {
-					actualRequirements, err := cmd.Requirements(factory, flagContext)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(factory.NewRoutingAPIRequirementCallCount()).To(Equal(1))
-					Expect(actualRequirements).To(ContainElement(routingAPIRequirement))
-				})
-
-				It("returns a MinAPIVersionRequirement", func() {
-					expectedVersion, err := semver.Make("2.36.0")
-					Expect(err).NotTo(HaveOccurred())
-
-					actualRequirements, err := cmd.Requirements(factory, flagContext)
-					Expect(err).NotTo(HaveOccurred())
-
-					Expect(factory.NewMinAPIVersionRequirementCallCount()).To(Equal(1))
-					feature, requiredVersion := factory.NewMinAPIVersionRequirementArgsForCall(0)
-					Expect(feature).To(Equal("Option '--router-group'"))
-					Expect(requiredVersion).To(Equal(expectedVersion))
-					Expect(actualRequirements).To(ContainElement(minAPIVersionRequirement))
-				})
 			})
 		})
 	})

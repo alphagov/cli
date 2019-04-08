@@ -85,8 +85,8 @@ type APITarget struct {
 }
 
 type Authentication struct {
-	Username string `positional-arg-name:"USERNAME" required:"true" description:"The username"`
-	Password string `positional-arg-name:"PASSWORD" required:"true" description:"The password"`
+	Username string `positional-arg-name:"USERNAME" description:"The username"`
+	Password string `positional-arg-name:"PASSWORD" description:"The password"`
 }
 
 type CreateUser struct {
@@ -167,7 +167,7 @@ type CopySourceArgs struct {
 }
 
 type CreateServiceArgs struct {
-	ServiceOffering string `positional-arg-name:"SERVICE" required:"true" description:"The service offering"`
+	Service         string `positional-arg-name:"SERVICE" required:"true" description:"The service offering"`
 	ServicePlan     string `positional-arg-name:"SERVICE_PLAN" required:"true" description:"The service plan that the service instance will use"`
 	ServiceInstance string `positional-arg-name:"SERVICE_INSTANCE" required:"true" description:"The service instance"`
 }
@@ -212,15 +212,20 @@ type SetSpaceQuotaArgs struct {
 	SpaceQuota string `positional-arg-name:"SPACE_QUOTA" required:"true" description:"The space quota"`
 }
 
+type V6SetHealthCheckArgs struct {
+	AppName     string                             `positional-arg-name:"APP_NAME" required:"true" description:"The application name"`
+	HealthCheck HealthCheckTypeWithDeprecatedValue `positional-arg-name:"HEALTH_CHECK_TYPE" required:"true" description:"Set to 'port' or 'none'"`
+}
+
 type SetHealthCheckArgs struct {
 	AppName     string          `positional-arg-name:"APP_NAME" required:"true" description:"The application name"`
-	HealthCheck HealthCheckType `positional-arg-name:"HEALTH_CHECK_TYPE" required:"true" description:"Set to 'port' or 'none'"`
+	HealthCheck HealthCheckType `positional-arg-name:"HEALTH_CHECK_TYPE" required:"true" description:"Set to 'port'"`
 }
 
 type CreateBuildpackArgs struct {
 	Buildpack string                      `positional-arg-name:"BUILDPACK" required:"true" description:"The buildpack"`
 	Path      PathWithExistenceCheckOrURL `positional-arg-name:"PATH" required:"true" description:"The path to the buildpack file"`
-	Position  string                      `positional-arg-name:"POSITION" required:"true" description:"The position that sets priority"`
+	Position  int                         `positional-arg-name:"POSITION" required:"true" description:"The position that sets priority"`
 }
 
 type RenameBuildpackArgs struct {
@@ -228,6 +233,22 @@ type RenameBuildpackArgs struct {
 	NewBuildpackName string `positional-arg-name:"NEW_BUILDPACK_NAME" required:"true" description:"The new buildpack name"`
 }
 
+type LabelsArgs struct {
+	ResourceType string `positional-arg-name:"RESOURCE" required:"true" description:"The type of resource to label"`
+	ResourceName string `positional-arg-name:"RESOURCE_NAME" required:"true" description:"The name of the resource"`
+}
+
+type SetLabelArgs struct {
+	ResourceType string   `positional-arg-name:"RESOURCE" required:"true" description:"The type of resource to label"`
+	ResourceName string   `positional-arg-name:"RESOURCE_NAME" required:"true" description:"The name of the resource"`
+	Labels       []string `positional-arg-name:"KEY=VALUE" required:"true" description:"A space-separated list of labels to set on the resource"`
+}
+
+type DeleteLabelArgs struct {
+	ResourceType string   `positional-arg-name:"RESOURCE" required:"true" description:"The type of resource"`
+	ResourceName string   `positional-arg-name:"RESOURCE_NAME" required:"true" description:"The name of the resource"`
+	LabelKeys    []string `positional-arg-name:"KEY" required:"true" description:"A label to delete on the resource"`
+}
 type SetOrgRoleArgs struct {
 	Username     string  `positional-arg-name:"USERNAME" required:"true" description:"The user"`
 	Organization string  `positional-arg-name:"ORG" required:"true" description:"The organization"`

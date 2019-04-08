@@ -15,10 +15,10 @@ import (
 	"github.com/blang/semver"
 
 	"code.cloudfoundry.org/cli/cf/api/apifakes"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -96,9 +96,9 @@ var _ = Describe("UpdateUserProvidedService", func() {
 			})
 		})
 
-		Context("when provided the -r flag", func() {
+		Context("when provided the -t flag", func() {
 			BeforeEach(func() {
-				flagContext.Parse("service-instance", "-r", "route-service-url")
+				flagContext.Parse("service-instance", "-t", "tag,a,service")
 			})
 
 			It("returns a MinAPIVersionRequirement", func() {
@@ -108,8 +108,8 @@ var _ = Describe("UpdateUserProvidedService", func() {
 				Expect(actualRequirements).To(ContainElement(minAPIVersionRequirement))
 
 				feature, requiredVersion := factory.NewMinAPIVersionRequirementArgsForCall(0)
-				Expect(feature).To(Equal("Option '-r'"))
-				expectedRequiredVersion, err := semver.Make("2.51.0")
+				Expect(feature).To(Equal("Option '-t'"))
+				expectedRequiredVersion, err := semver.Make("2.104.0")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(requiredVersion).To(Equal(expectedRequiredVersion))
 			})
@@ -151,6 +151,7 @@ var _ = Describe("UpdateUserProvidedService", func() {
 					ServiceInstanceFields: models.ServiceInstanceFields{
 						Name:   "service-instance",
 						Params: map[string]interface{}{},
+						Type:   "user_provided_service_instance",
 					},
 					ServicePlan: models.ServicePlanFields{
 						GUID:        "",
@@ -170,7 +171,9 @@ var _ = Describe("UpdateUserProvidedService", func() {
 			It("tries to update the service instance", func() {
 				Expect(runCLIErr).NotTo(HaveOccurred())
 				Expect(serviceInstanceRepo.UpdateCallCount()).To(Equal(1))
-				Expect(serviceInstanceRepo.UpdateArgsForCall(0)).To(Equal(serviceInstance.ServiceInstanceFields))
+				expectedFields := serviceInstance.ServiceInstanceFields
+				expectedFields.Tags = []string{}
+				Expect(serviceInstanceRepo.UpdateArgsForCall(0)).To(Equal(expectedFields))
 			})
 
 			It("tells the user no changes were made", func() {
@@ -192,6 +195,12 @@ var _ = Describe("UpdateUserProvidedService", func() {
 					Expect(serviceInstanceFields.Params).To(Equal(map[string]interface{}{
 						"some": "json",
 					}))
+				})
+
+				It("does not tell the user that no changes were made", func() {
+					Expect(ui.Outputs()).NotTo(ContainSubstrings(
+						[]string{"No flags specified. No changes were made."},
+					))
 				})
 			})
 
@@ -221,6 +230,12 @@ var _ = Describe("UpdateUserProvidedService", func() {
 						"some": "json",
 					}))
 				})
+
+				It("does not tell the user that no changes were made", func() {
+					Expect(ui.Outputs()).NotTo(ContainSubstrings(
+						[]string{"No flags specified. No changes were made."},
+					))
+				})
 			})
 
 			Context("when the -p flag is passed with inline JSON", func() {
@@ -246,6 +261,31 @@ var _ = Describe("UpdateUserProvidedService", func() {
 						"key1": "value1",
 						"key2": "value2",
 					}))
+				})
+
+				It("does not tell the user that no changes were made", func() {
+					Expect(ui.Outputs()).NotTo(ContainSubstrings(
+						[]string{"No flags specified. No changes were made."},
+					))
+				})
+			})
+
+			Context("when passing in tags", func() {
+				BeforeEach(func() {
+					flagContext.Parse("service-instance", "-t", "tag1, tag2, tag3, tag4")
+				})
+
+				It("sucessfully updates the service instance and passes the tags as json", func() {
+					Expect(runCLIErr).NotTo(HaveOccurred())
+					Expect(serviceInstanceRepo.UpdateCallCount()).To(Equal(1))
+					serviceInstanceFields := serviceInstanceRepo.UpdateArgsForCall(0)
+					Expect(serviceInstanceFields.Tags).To(ConsistOf("tag1", "tag2", "tag3", "tag4"))
+				})
+
+				It("does not tell the user that no changes were made", func() {
+					Expect(ui.Outputs()).NotTo(ContainSubstrings(
+						[]string{"No flags specified. No changes were made."},
+					))
 				})
 			})
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"code.cloudfoundry.org/cli/cf"
 	"code.cloudfoundry.org/cli/cf/api/resources"
 	"code.cloudfoundry.org/cli/cf/api/spacequotas"
 	"code.cloudfoundry.org/cli/cf/commandregistry"
@@ -67,14 +66,6 @@ func (cmd *CreateSpaceQuota) Requirements(requirementsFactory requirements.Facto
 	reqs := []requirements.Requirement{
 		requirementsFactory.NewLoginRequirement(),
 		requirementsFactory.NewTargetedOrgRequirement(),
-	}
-
-	if fc.IsSet("a") {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement("Option '-a'", cf.SpaceAppInstanceLimitMinimumAPIVersion))
-	}
-
-	if fc.IsSet("reserved-route-ports") {
-		reqs = append(reqs, requirementsFactory.NewMinAPIVersionRequirement("Option '--reserved-route-ports'", cf.ReservedRoutePortsMinimumAPIVersion))
 	}
 
 	return reqs, nil

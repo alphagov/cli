@@ -1,7 +1,9 @@
 package ccv3
 
 import (
+	"fmt"
 	"strconv"
+	"time"
 
 	"code.cloudfoundry.org/cli/api/cloudcontroller"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
@@ -9,55 +11,72 @@ import (
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/internal"
 )
 
-//ProcessInstance represents a single process instance for a
-//particular application
+// ProcessInstance represents a single process instance for a particular
+// application.
 type ProcessInstance struct {
-	//CPU is the current CPU usage of the instance
+	// CPU is the current CPU usage of the instance.
 	CPU float64
-	//DiskQuota is the maximum disk the instance is allowed to use.
+	// Details is information about errors placing the instance.
+	Details string
+	// DiskQuota is the maximum disk the instance is allowed to use.
 	DiskQuota uint64
-	//DiskUsage is the current disk usage of the instance
+	// DiskUsage is the current disk usage of the instance.
 	DiskUsage uint64
-	//Index is the index of the instance
-	Index int
-	//MemoryQuota is the maximum memory the instance is allowed to use.
+	// Index is the index of the instance.
+	Index int64
+	// Isolation segment is the current isolation segment that the instance is
+	// running on. The value is empty when the instance is not placed on a
+	// particular isolation segment.
+	IsolationSegment string
+	// MemoryQuota is the maximum memory the instance is allowed to use.
 	MemoryQuota uint64
-	//DiskUsage is the current memory usage of the instance
+	// DiskUsage is the current memory usage of the instance.
 	MemoryUsage uint64
-	//State is the state of the instance.
+	// State is the state of the instance.
 	State constant.ProcessInstanceState
-	//Uptime is the uptime in seconds for the instance
-	Uptime int
+	// Type is the process type for the instance.
+	Type string
+	// Uptime is the duration that the instance has been running.
+	Uptime time.Duration
 }
 
 // UnmarshalJSON helps unmarshal a V3 Cloud Controller Instance response.
 func (instance *ProcessInstance) UnmarshalJSON(data []byte) error {
 	var inputInstance struct {
-		State string `json:"state"`
-		Usage struct {
+		Details          string `json:"details"`
+		DiskQuota        uint64 `json:"disk_quota"`
+		Index            int64  `json:"index"`
+		IsolationSegment string `json:"isolation_segment"`
+		MemQuota         uint64 `json:"mem_quota"`
+		State            string `json:"state"`
+		Type             string `json:"type"`
+		Uptime           int64  `json:"uptime"`
+		Usage            struct {
 			CPU  float64 `json:"cpu"`
 			Mem  uint64  `json:"mem"`
 			Disk uint64  `json:"disk"`
 		} `json:"usage"`
-		MemQuota  uint64 `json:"mem_quota"`
-		DiskQuota uint64 `json:"disk_quota"`
-		Index     int    `json:"index"`
-		Uptime    int    `json:"uptime"`
 	}
+
 	err := cloudcontroller.DecodeJSON(data, &inputInstance)
 	if err != nil {
 		return err
 	}
 
-	instance.State = constant.ProcessInstanceState(inputInstance.State)
 	instance.CPU = inputInstance.Usage.CPU
-	instance.MemoryUsage = inputInstance.Usage.Mem
-	instance.DiskUsage = inputInstance.Usage.Disk
-
-	instance.MemoryQuota = inputInstance.MemQuota
+	instance.Details = inputInstance.Details
 	instance.DiskQuota = inputInstance.DiskQuota
+	instance.DiskUsage = inputInstance.Usage.Disk
 	instance.Index = inputInstance.Index
-	instance.Uptime = inputInstance.Uptime
+	instance.IsolationSegment = inputInstance.IsolationSegment
+	instance.MemoryQuota = inputInstance.MemQuota
+	instance.MemoryUsage = inputInstance.Usage.Mem
+	instance.State = constant.ProcessInstanceState(inputInstance.State)
+	instance.Type = inputInstance.Type
+	instance.Uptime, err = time.ParseDuration(fmt.Sprintf("%ds", inputInstance.Uptime))
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

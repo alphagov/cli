@@ -221,6 +221,12 @@ func (actor Actor) GetSpaceRoutes(spaceGUID string) ([]Route, Warnings, error) {
 	return routes, append(allWarnings, domainWarnings...), err
 }
 
+// DeleteUnmappedRoutes deletes the unmapped routes associated with the provided Space GUID.
+func (actor Actor) DeleteUnmappedRoutes(spaceGUID string) (Warnings, error) {
+	warnings, err := actor.CloudControllerClient.DeleteSpaceUnmappedRoutes(spaceGUID)
+	return Warnings(warnings), err
+}
+
 // DeleteRoute deletes the Route associated with the provided Route GUID.
 func (actor Actor) DeleteRoute(routeGUID string) (Warnings, error) {
 	warnings, err := actor.CloudControllerClient.DeleteRoute(routeGUID)
@@ -228,7 +234,7 @@ func (actor Actor) DeleteRoute(routeGUID string) (Warnings, error) {
 }
 
 func (actor Actor) CheckRoute(route Route) (bool, Warnings, error) {
-	exists, warnings, err := actor.CloudControllerClient.DoesRouteExist(ActorToCCRoute(route))
+	exists, warnings, err := actor.CloudControllerClient.CheckRoute(ActorToCCRoute(route))
 	return exists, Warnings(warnings), err
 }
 
@@ -242,7 +248,7 @@ func (actor Actor) FindRouteBoundToSpaceWithSettings(route Route) (Route, Warnin
 	if routeNotFoundErr, ok := err.(actionerror.RouteNotFoundError); ok {
 		// This check only works for API versions 2.55 or higher. It will return
 		// false for anything below that.
-		log.Infoln("checking route existence for: %s", route)
+		log.Infof("checking route existence for: %s\n", route)
 		exists, checkRouteWarnings, chkErr := actor.CheckRoute(route)
 		if chkErr != nil {
 			log.Errorln("check route:", err)

@@ -40,7 +40,7 @@ var _ = Describe("Application Actions", func() {
 			warnings, executeErr = actor.DeleteApplicationByNameAndSpace("some-app", "some-space-guid")
 		})
 
-		Context("when looking up the app guid fails", func() {
+		When("looking up the app guid fails", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns([]ccv3.Application{}, ccv3.Warnings{"some-get-app-warning"}, errors.New("some-get-app-error"))
 			})
@@ -51,12 +51,12 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 
-		Context("when looking up the app guid succeeds", func() {
+		When("looking up the app guid succeeds", func() {
 			BeforeEach(func() {
-				fakeCloudControllerClient.GetApplicationsReturns([]ccv3.Application{ccv3.Application{Name: "some-app", GUID: "abc123"}}, ccv3.Warnings{"some-get-app-warning"}, nil)
+				fakeCloudControllerClient.GetApplicationsReturns([]ccv3.Application{{Name: "some-app", GUID: "abc123"}}, ccv3.Warnings{"some-get-app-warning"}, nil)
 			})
 
-			Context("when sending the delete fails", func() {
+			When("sending the delete fails", func() {
 				BeforeEach(func() {
 					fakeCloudControllerClient.DeleteApplicationReturns("", ccv3.Warnings{"some-delete-app-warning"}, errors.New("some-delete-app-error"))
 				})
@@ -67,12 +67,12 @@ var _ = Describe("Application Actions", func() {
 				})
 			})
 
-			Context("when sending the delete succeeds", func() {
+			When("sending the delete succeeds", func() {
 				BeforeEach(func() {
 					fakeCloudControllerClient.DeleteApplicationReturns("/some-job-url", ccv3.Warnings{"some-delete-app-warning"}, nil)
 				})
 
-				Context("when polling fails", func() {
+				When("polling fails", func() {
 					BeforeEach(func() {
 						fakeCloudControllerClient.PollJobReturns(ccv3.Warnings{"some-poll-warning"}, errors.New("some-poll-error"))
 					})
@@ -83,7 +83,7 @@ var _ = Describe("Application Actions", func() {
 					})
 				})
 
-				Context("when polling succeeds", func() {
+				When("polling succeeds", func() {
 					BeforeEach(func() {
 						fakeCloudControllerClient.PollJobReturns(ccv3.Warnings{"some-poll-warning"}, nil)
 					})
@@ -98,13 +98,22 @@ var _ = Describe("Application Actions", func() {
 	})
 
 	Describe("GetApplicationByNameAndSpace", func() {
-		Context("when the app exists", func() {
+		When("the app exists", func() {
+			var (
+				warnings   Warnings
+				executeErr error
+				app        Application
+			)
+
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns(
 					[]ccv3.Application{
 						{
 							Name: "some-app-name",
 							GUID: "some-app-guid",
+							Relationships: ccv3.Relationships{
+								constant.RelationshipTypeSpace: ccv3.Relationship{GUID: "some-space-guid"},
+							},
 						},
 					},
 					ccv3.Warnings{"some-warning"},
@@ -112,14 +121,18 @@ var _ = Describe("Application Actions", func() {
 				)
 			})
 
+			JustBeforeEach(func() {
+				app, warnings, executeErr = actor.GetApplicationByNameAndSpace("some-app-name", "some-space-guid")
+			})
+
 			It("returns the application and warnings", func() {
-				app, warnings, err := actor.GetApplicationByNameAndSpace("some-app-name", "some-space-guid")
-				Expect(err).ToNot(HaveOccurred())
+				Expect(executeErr).ToNot(HaveOccurred())
 				Expect(app).To(Equal(Application{
-					Name: "some-app-name",
-					GUID: "some-app-guid",
+					Name:      "some-app-name",
+					GUID:      "some-app-guid",
+					SpaceGUID: "some-space-guid",
 				}))
-				Expect(warnings).To(Equal(Warnings{"some-warning"}))
+				Expect(warnings).To(ConsistOf("some-warning"))
 
 				Expect(fakeCloudControllerClient.GetApplicationsCallCount()).To(Equal(1))
 				Expect(fakeCloudControllerClient.GetApplicationsArgsForCall(0)).To(ConsistOf(
@@ -129,7 +142,7 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 
-		Context("when the cloud controller client returns an error", func() {
+		When("the cloud controller client returns an error", func() {
 			var expectedError error
 
 			BeforeEach(func() {
@@ -147,7 +160,7 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 
-		Context("when the app does not exist", func() {
+		When("the app does not exist", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns(
 					[]ccv3.Application{},
@@ -165,17 +178,23 @@ var _ = Describe("Application Actions", func() {
 	})
 
 	Describe("GetApplicationsBySpace", func() {
-		Context("when the there are applications in the space", func() {
+		When("there are applications in the space", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationsReturns(
 					[]ccv3.Application{
 						{
 							GUID: "some-app-guid-1",
 							Name: "some-app-1",
+							Relationships: ccv3.Relationships{
+								constant.RelationshipTypeSpace: ccv3.Relationship{GUID: "some-space-guid-1"},
+							},
 						},
 						{
 							GUID: "some-app-guid-2",
 							Name: "some-app-2",
+							Relationships: ccv3.Relationships{
+								constant.RelationshipTypeSpace: ccv3.Relationship{GUID: "some-space-guid-2"},
+							},
 						},
 					},
 					ccv3.Warnings{"warning-1", "warning-2"},
@@ -188,12 +207,14 @@ var _ = Describe("Application Actions", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(apps).To(ConsistOf(
 					Application{
-						GUID: "some-app-guid-1",
-						Name: "some-app-1",
+						GUID:      "some-app-guid-1",
+						Name:      "some-app-1",
+						SpaceGUID: "some-space-guid-1",
 					},
 					Application{
-						GUID: "some-app-guid-2",
-						Name: "some-app-2",
+						GUID:      "some-app-guid-2",
+						Name:      "some-app-2",
+						SpaceGUID: "some-space-guid-2",
 					},
 				))
 				Expect(warnings).To(ConsistOf("warning-1", "warning-2"))
@@ -205,7 +226,7 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 
-		Context("when the cloud controller client returns an error", func() {
+		When("the cloud controller client returns an error", func() {
 			var expectedError error
 
 			BeforeEach(func() {
@@ -218,6 +239,74 @@ var _ = Describe("Application Actions", func() {
 
 			It("returns the error and warnings", func() {
 				_, warnings, err := actor.GetApplicationsBySpace("some-space-guid")
+				Expect(warnings).To(ConsistOf("some-warning"))
+				Expect(err).To(MatchError(expectedError))
+			})
+		})
+	})
+
+	Describe("GetApplicationsByGUIDs", func() {
+		When("there are applications that match provided guids", func() {
+			BeforeEach(func() {
+				fakeCloudControllerClient.GetApplicationsReturns(
+					[]ccv3.Application{
+						{
+							GUID: "some-app-guid-1",
+							Name: "some-app-1",
+							Relationships: ccv3.Relationships{
+								constant.RelationshipTypeSpace: ccv3.Relationship{GUID: "some-space-guid-1"},
+							},
+						},
+						{
+							GUID: "some-app-guid-2",
+							Name: "some-app-2",
+							Relationships: ccv3.Relationships{
+								constant.RelationshipTypeSpace: ccv3.Relationship{GUID: "some-space-guid-2"},
+							},
+						},
+					},
+					ccv3.Warnings{"warning-1", "warning-2"},
+					nil,
+				)
+			})
+
+			It("returns the applications and warnings", func() {
+				apps, warnings, err := actor.GetApplicationsByGUIDs("some-app-guid-1", "some-app-guid-2")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(apps).To(ConsistOf(
+					Application{
+						GUID:      "some-app-guid-1",
+						Name:      "some-app-1",
+						SpaceGUID: "some-space-guid-1",
+					},
+					Application{
+						GUID:      "some-app-guid-2",
+						Name:      "some-app-2",
+						SpaceGUID: "some-space-guid-2",
+					},
+				))
+				Expect(warnings).To(ConsistOf("warning-1", "warning-2"))
+
+				Expect(fakeCloudControllerClient.GetApplicationsCallCount()).To(Equal(1))
+				Expect(fakeCloudControllerClient.GetApplicationsArgsForCall(0)).To(ConsistOf(
+					ccv3.Query{Key: ccv3.GUIDFilter, Values: []string{"some-app-guid-1", "some-app-guid-2"}},
+				))
+			})
+		})
+
+		When("the cloud controller client returns an error", func() {
+			var expectedError error
+
+			BeforeEach(func() {
+				expectedError = errors.New("I am a CloudControllerClient Error")
+				fakeCloudControllerClient.GetApplicationsReturns(
+					[]ccv3.Application{},
+					ccv3.Warnings{"some-warning"},
+					expectedError)
+			})
+
+			It("returns the error and warnings", func() {
+				_, warnings, err := actor.GetApplicationsByGUIDs("some-space-guid")
 				Expect(warnings).To(ConsistOf("some-warning"))
 				Expect(err).To(MatchError(expectedError))
 			})
@@ -239,7 +328,7 @@ var _ = Describe("Application Actions", func() {
 			}, "some-space-guid")
 		})
 
-		Context("when the app successfully gets created", func() {
+		When("the app successfully gets created", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.CreateApplicationReturns(
 					ccv3.Application{
@@ -247,6 +336,9 @@ var _ = Describe("Application Actions", func() {
 						GUID:                "some-app-guid",
 						LifecycleType:       constant.AppLifecycleTypeBuildpack,
 						LifecycleBuildpacks: []string{"buildpack-1", "buildpack-2"},
+						Relationships: ccv3.Relationships{
+							constant.RelationshipTypeSpace: ccv3.Relationship{GUID: "some-space-guid"},
+						},
 					},
 					ccv3.Warnings{"some-warning"},
 					nil,
@@ -260,6 +352,7 @@ var _ = Describe("Application Actions", func() {
 					GUID:                "some-app-guid",
 					LifecycleType:       constant.AppLifecycleTypeBuildpack,
 					LifecycleBuildpacks: []string{"buildpack-1", "buildpack-2"},
+					SpaceGUID:           "some-space-guid",
 				}))
 				Expect(warnings).To(ConsistOf("some-warning"))
 
@@ -275,7 +368,7 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 
-		Context("when the cc client returns an error", func() {
+		When("the cc client returns an error", func() {
 			var expectedError error
 
 			BeforeEach(func() {
@@ -293,7 +386,7 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 
-		Context("when the cc client returns an NameNotUniqueInSpaceError", func() {
+		When("the cc client returns an NameNotUniqueInSpaceError", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.CreateApplicationReturns(
 					ccv3.Application{},
@@ -311,27 +404,36 @@ var _ = Describe("Application Actions", func() {
 
 	Describe("UpdateApplication", func() {
 		var (
-			application Application
-			warnings    Warnings
-			err         error
+			submitApp, resultApp Application
+			warnings             Warnings
+			err                  error
 		)
 
 		JustBeforeEach(func() {
-			application, warnings, err = actor.UpdateApplication(Application{
+			submitApp = Application{
 				GUID:                "some-app-guid",
+				StackName:           "some-stack-name",
 				LifecycleType:       constant.AppLifecycleTypeBuildpack,
 				LifecycleBuildpacks: []string{"buildpack-1", "buildpack-2"},
-			})
+			}
+			resultApp, warnings, err = actor.UpdateApplication(submitApp)
 		})
 
-		Context("when the app successfully gets updated", func() {
+		When("the app successfully gets updated", func() {
+			var apiResponseApp ccv3.Application
+
 			BeforeEach(func() {
-				fakeCloudControllerClient.UpdateApplicationReturns(
-					ccv3.Application{
-						GUID:                "some-app-guid",
-						LifecycleType:       constant.AppLifecycleTypeBuildpack,
-						LifecycleBuildpacks: []string{"buildpack-1", "buildpack-2"},
+				apiResponseApp = ccv3.Application{
+					GUID:                "response-app-guid",
+					StackName:           "response-stack-name",
+					LifecycleType:       constant.AppLifecycleTypeBuildpack,
+					LifecycleBuildpacks: []string{"response-buildpack-1", "response-buildpack-2"},
+					Relationships: ccv3.Relationships{
+						constant.RelationshipTypeSpace: ccv3.Relationship{GUID: "some-space-guid"},
 					},
+				}
+				fakeCloudControllerClient.UpdateApplicationReturns(
+					apiResponseApp,
 					ccv3.Warnings{"some-warning"},
 					nil,
 				)
@@ -339,23 +441,26 @@ var _ = Describe("Application Actions", func() {
 
 			It("creates and returns the application and warnings", func() {
 				Expect(err).ToNot(HaveOccurred())
-				Expect(application).To(Equal(Application{
-					GUID:                "some-app-guid",
-					LifecycleType:       constant.AppLifecycleTypeBuildpack,
-					LifecycleBuildpacks: []string{"buildpack-1", "buildpack-2"},
+				Expect(resultApp).To(Equal(Application{
+					GUID:                apiResponseApp.GUID,
+					StackName:           apiResponseApp.StackName,
+					LifecycleType:       apiResponseApp.LifecycleType,
+					LifecycleBuildpacks: apiResponseApp.LifecycleBuildpacks,
+					SpaceGUID:           "some-space-guid",
 				}))
 				Expect(warnings).To(ConsistOf("some-warning"))
 
 				Expect(fakeCloudControllerClient.UpdateApplicationCallCount()).To(Equal(1))
 				Expect(fakeCloudControllerClient.UpdateApplicationArgsForCall(0)).To(Equal(ccv3.Application{
-					GUID:                "some-app-guid",
-					LifecycleType:       constant.AppLifecycleTypeBuildpack,
-					LifecycleBuildpacks: []string{"buildpack-1", "buildpack-2"},
+					GUID:                submitApp.GUID,
+					StackName:           submitApp.StackName,
+					LifecycleType:       submitApp.LifecycleType,
+					LifecycleBuildpacks: submitApp.LifecycleBuildpacks,
 				}))
 			})
 		})
 
-		Context("when the cc client returns an error", func() {
+		When("the cc client returns an error", func() {
 			var expectedError error
 
 			BeforeEach(func() {
@@ -395,7 +500,7 @@ var _ = Describe("Application Actions", func() {
 			}()
 		})
 
-		Context("when getting the application processes fails", func() {
+		When("getting the application processes fails", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetApplicationProcessesReturns(nil, ccv3.Warnings{"get-app-warning-1", "get-app-warning-2"}, errors.New("some-error"))
 			})
@@ -408,7 +513,7 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 
-		Context("when getting the application processes succeeds", func() {
+		When("getting the application processes succeeds", func() {
 			var processes []ccv3.Process
 
 			BeforeEach(func() {
@@ -422,12 +527,12 @@ var _ = Describe("Application Actions", func() {
 					ccv3.Warnings{"get-app-warning-1"}, nil)
 			})
 
-			Context("when there is a single process", func() {
+			When("there is a single process", func() {
 				BeforeEach(func() {
 					processes = []ccv3.Process{{GUID: "abc123"}}
 				})
 
-				Context("when the polling times out", func() {
+				When("the polling times out", func() {
 					BeforeEach(func() {
 						fakeConfig.StartupTimeoutReturns(time.Millisecond)
 						fakeConfig.PollingIntervalReturns(time.Millisecond * 2)
@@ -455,7 +560,7 @@ var _ = Describe("Application Actions", func() {
 					})
 				})
 
-				Context("when getting the process instances errors", func() {
+				When("getting the process instances errors", func() {
 					BeforeEach(func() {
 						fakeCloudControllerClient.GetProcessInstancesReturns(
 							nil,
@@ -473,7 +578,7 @@ var _ = Describe("Application Actions", func() {
 					})
 				})
 
-				Context("when getting the process instances succeeds", func() {
+				When("getting the process instances succeeds", func() {
 					var (
 						initialInstanceStates    []ccv3.ProcessInstance
 						eventualInstanceStates   []ccv3.ProcessInstance
@@ -503,7 +608,7 @@ var _ = Describe("Application Actions", func() {
 						funcDone <- nil
 					})
 
-					Context("when there are no process instances", func() {
+					When("there are no process instances", func() {
 						BeforeEach(func() {
 							initialInstanceStates = []ccv3.ProcessInstance{}
 							eventualInstanceStates = []ccv3.ProcessInstance{}
@@ -522,7 +627,7 @@ var _ = Describe("Application Actions", func() {
 						})
 					})
 
-					Context("when all instances become running by the second call", func() {
+					When("all instances become running by the second call", func() {
 						BeforeEach(func() {
 							initialInstanceStates = []ccv3.ProcessInstance{{State: constant.ProcessInstanceStarting}, {State: constant.ProcessInstanceStarting}}
 							eventualInstanceStates = []ccv3.ProcessInstance{{State: constant.ProcessInstanceRunning}, {State: constant.ProcessInstanceRunning}}
@@ -541,7 +646,7 @@ var _ = Describe("Application Actions", func() {
 						})
 					})
 
-					Context("when at least one instance has become running by the second call", func() {
+					When("at least one instance has become running by the second call", func() {
 						BeforeEach(func() {
 							initialInstanceStates = []ccv3.ProcessInstance{{State: constant.ProcessInstanceStarting}, {State: constant.ProcessInstanceStarting}, {State: constant.ProcessInstanceStarting}}
 							eventualInstanceStates = []ccv3.ProcessInstance{{State: constant.ProcessInstanceStarting}, {State: constant.ProcessInstanceStarting}, {State: constant.ProcessInstanceRunning}}
@@ -561,7 +666,7 @@ var _ = Describe("Application Actions", func() {
 						})
 					})
 
-					Context("when all of the instances have crashed by the second call", func() {
+					When("all of the instances have crashed by the second call", func() {
 						BeforeEach(func() {
 							initialInstanceStates = []ccv3.ProcessInstance{{State: constant.ProcessInstanceStarting}, {State: constant.ProcessInstanceStarting}, {State: constant.ProcessInstanceStarting}}
 							eventualInstanceStates = []ccv3.ProcessInstance{{State: constant.ProcessInstanceCrashed}, {State: constant.ProcessInstanceCrashed}, {State: constant.ProcessInstanceCrashed}}
@@ -599,9 +704,9 @@ var _ = Describe("Application Actions", func() {
 					fakeCloudControllerClient.GetProcessInstancesStub = func(processGuid string) ([]ccv3.ProcessInstance, ccv3.Warnings, error) {
 						defer func() { processInstanceCallCount++ }()
 						if strings.HasPrefix(processGuid, "good") {
-							return []ccv3.ProcessInstance{ccv3.ProcessInstance{State: constant.ProcessInstanceRunning}}, nil, nil
+							return []ccv3.ProcessInstance{{State: constant.ProcessInstanceRunning}}, nil, nil
 						} else {
-							return []ccv3.ProcessInstance{ccv3.ProcessInstance{State: constant.ProcessInstanceStarting}}, nil, nil
+							return []ccv3.ProcessInstance{{State: constant.ProcessInstanceStarting}}, nil, nil
 						}
 					}
 
@@ -609,7 +714,7 @@ var _ = Describe("Application Actions", func() {
 					funcDone <- nil
 				})
 
-				Context("when none of the processes are ready", func() {
+				When("none of the processes are ready", func() {
 					BeforeEach(func() {
 						processes = []ccv3.Process{{GUID: "bad-1"}, {GUID: "bad-2"}}
 					})
@@ -620,7 +725,7 @@ var _ = Describe("Application Actions", func() {
 
 				})
 
-				Context("when some of the processes are ready", func() {
+				When("some of the processes are ready", func() {
 					BeforeEach(func() {
 						processes = []ccv3.Process{{GUID: "bad-1"}, {GUID: "good-1"}}
 					})
@@ -630,7 +735,7 @@ var _ = Describe("Application Actions", func() {
 					})
 				})
 
-				Context("when all of the processes are ready", func() {
+				When("all of the processes are ready", func() {
 					BeforeEach(func() {
 						processes = []ccv3.Process{{GUID: "good-1"}, {GUID: "good-2"}}
 					})
@@ -653,7 +758,7 @@ var _ = Describe("Application Actions", func() {
 			warnings, executeErr = actor.StopApplication("some-app-guid")
 		})
 
-		Context("when there are no client errors", func() {
+		When("there are no client errors", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.UpdateApplicationStopReturns(
 					ccv3.Application{GUID: "some-app-guid"},
@@ -671,7 +776,7 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 
-		Context("when stopping the application fails", func() {
+		When("stopping the application fails", func() {
 			var expectedErr error
 			BeforeEach(func() {
 				expectedErr = errors.New("some set stop-application error")
@@ -690,7 +795,7 @@ var _ = Describe("Application Actions", func() {
 	})
 
 	Describe("StartApplication", func() {
-		Context("when there are no client errors", func() {
+		When("there are no client errors", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.UpdateApplicationStartReturns(
 					ccv3.Application{GUID: "some-app-guid"},
@@ -711,7 +816,7 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 
-		Context("when starting the application fails", func() {
+		When("starting the application fails", func() {
 			var expectedErr error
 			BeforeEach(func() {
 				expectedErr = errors.New("some set start-application error")
@@ -730,4 +835,51 @@ var _ = Describe("Application Actions", func() {
 			})
 		})
 	})
+
+	Describe("RestartApplication", func() {
+		var (
+			warnings   Warnings
+			executeErr error
+		)
+
+		JustBeforeEach(func() {
+			warnings, executeErr = actor.RestartApplication("some-app-guid")
+		})
+
+		When("there are no client errors", func() {
+			BeforeEach(func() {
+				fakeCloudControllerClient.UpdateApplicationRestartReturns(
+					ccv3.Application{GUID: "some-app-guid"},
+					ccv3.Warnings{"restart-application-warning"},
+					nil,
+				)
+			})
+
+			It("stops the application", func() {
+				Expect(executeErr).ToNot(HaveOccurred())
+				Expect(warnings).To(ConsistOf("restart-application-warning"))
+
+				Expect(fakeCloudControllerClient.UpdateApplicationRestartCallCount()).To(Equal(1))
+				Expect(fakeCloudControllerClient.UpdateApplicationRestartArgsForCall(0)).To(Equal("some-app-guid"))
+			})
+		})
+
+		When("restarting the application fails", func() {
+			var expectedErr error
+			BeforeEach(func() {
+				expectedErr = errors.New("some set restart-application error")
+				fakeCloudControllerClient.UpdateApplicationRestartReturns(
+					ccv3.Application{},
+					ccv3.Warnings{"restart-application-warning"},
+					expectedErr,
+				)
+			})
+
+			It("returns the error", func() {
+				Expect(executeErr).To(Equal(expectedErr))
+				Expect(warnings).To(ConsistOf("restart-application-warning"))
+			})
+		})
+	})
+
 })

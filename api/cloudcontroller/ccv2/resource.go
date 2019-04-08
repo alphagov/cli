@@ -27,6 +27,22 @@ type Resource struct {
 	Size int64 `json:"size"`
 }
 
+// MarshalJSON converts a resource into a Cloud Controller Resource.
+func (r Resource) MarshalJSON() ([]byte, error) {
+	var ccResource struct {
+		Filename string `json:"fn,omitempty"`
+		Mode     string `json:"mode,omitempty"`
+		SHA1     string `json:"sha1"`
+		Size     int64  `json:"size"`
+	}
+
+	ccResource.Filename = r.Filename
+	ccResource.Size = r.Size
+	ccResource.SHA1 = r.SHA1
+	ccResource.Mode = strconv.FormatUint(uint64(r.Mode), 8)
+	return json.Marshal(ccResource)
+}
+
 // UnmarshalJSON helps unmarshal a Cloud Controller Resource response.
 func (r *Resource) UnmarshalJSON(data []byte) error {
 	var ccResource struct {
@@ -53,22 +69,6 @@ func (r *Resource) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON converts a resource into a Cloud Controller Resource.
-func (r Resource) MarshalJSON() ([]byte, error) {
-	var ccResource struct {
-		Filename string `json:"fn,omitempty"`
-		Mode     string `json:"mode,omitempty"`
-		SHA1     string `json:"sha1"`
-		Size     int64  `json:"size"`
-	}
-
-	ccResource.Filename = r.Filename
-	ccResource.Size = r.Size
-	ccResource.SHA1 = r.SHA1
-	ccResource.Mode = strconv.FormatUint(uint64(r.Mode), 8)
-	return json.Marshal(ccResource)
-}
-
 // UpdateResourceMatch returns the resources that exist on the cloud foundry instance
 // from the set of resources given.
 func (client *Client) UpdateResourceMatch(resourcesToMatch []Resource) ([]Resource, Warnings, error) {
@@ -89,7 +89,7 @@ func (client *Client) UpdateResourceMatch(resourcesToMatch []Resource) ([]Resour
 
 	var matchedResources []Resource
 	response := cloudcontroller.Response{
-		Result: &matchedResources,
+		DecodeJSONResponseInto: &matchedResources,
 	}
 
 	err = client.connection.Make(request, &response)

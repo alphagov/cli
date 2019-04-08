@@ -1,6 +1,9 @@
 package ccv2
 
 import (
+	"bytes"
+	"encoding/json"
+
 	"code.cloudfoundry.org/cli/api/cloudcontroller"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2/constant"
@@ -11,6 +14,9 @@ import (
 type Domain struct {
 	// GUID is the unique domain identifier.
 	GUID string
+
+	// Internal indicates whether the domain is an internal domain.
+	Internal bool
 
 	// Name is the name given to the domain.
 	Name string
@@ -36,6 +42,7 @@ func (domain *Domain) UnmarshalJSON(data []byte) error {
 			Name            string `json:"name"`
 			RouterGroupGUID string `json:"router_group_guid"`
 			RouterGroupType string `json:"router_group_type"`
+			Internal        bool   `json:"internal"`
 		} `json:"entity"`
 	}
 	err := cloudcontroller.DecodeJSON(data, &ccDomain)
@@ -47,32 +54,64 @@ func (domain *Domain) UnmarshalJSON(data []byte) error {
 	domain.Name = ccDomain.Entity.Name
 	domain.RouterGroupGUID = ccDomain.Entity.RouterGroupGUID
 	domain.RouterGroupType = constant.RouterGroupType(ccDomain.Entity.RouterGroupType)
+	domain.Internal = ccDomain.Entity.Internal
 	return nil
 }
 
-// GetSharedDomain returns the Shared Domain associated with the provided
-// Domain GUID.
-func (client *Client) GetSharedDomain(domainGUID string) (Domain, Warnings, error) {
+type createSharedDomainBody struct {
+	Name            string `json:"name"`
+	RouterGroupGUID string `json:"router_group_guid,omitempty"`
+	Internal        bool   `json:"internal"`
+}
+
+func (client *Client) CreateSharedDomain(domainName string, routerGroupdGUID string, isInternal bool) (Warnings, error) {
+	body := createSharedDomainBody{
+		Name:            domainName,
+		RouterGroupGUID: routerGroupdGUID,
+		Internal:        isInternal,
+	}
+	bodyBytes, err := json.Marshal(body)
 	request, err := client.newHTTPRequest(requestOptions{
-		RequestName: internal.GetSharedDomainRequest,
-		URIParams:   map[string]string{"shared_domain_guid": domainGUID},
+		RequestName: internal.PostSharedDomainRequest,
+		Body:        bytes.NewReader(bodyBytes),
 	})
+
 	if err != nil {
-		return Domain{}, nil, err
+		return nil, err
 	}
 
-	var domain Domain
-	response := cloudcontroller.Response{
-		Result: &domain,
-	}
+	var response cloudcontroller.Response
 
 	err = client.connection.Make(request, &response)
+	return response.Warnings, err
+}
+
+// GetOrganizationPrivateDomains returns the private domains associated with an organization.
+func (client *Client) GetOrganizationPrivateDomains(orgGUID string, filters ...Filter) ([]Domain, Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.GetOrganizationPrivateDomainsRequest,
+		Query:       ConvertFilterParameters(filters),
+		URIParams:   map[string]string{"organization_guid": orgGUID},
+	})
 	if err != nil {
-		return Domain{}, response.Warnings, err
+		return []Domain{}, nil, err
 	}
 
-	domain.Type = constant.SharedDomain
-	return domain, response.Warnings, nil
+	fullDomainsList := []Domain{}
+	warnings, err := client.paginate(request, Domain{}, func(item interface{}) error {
+		if domain, ok := item.(Domain); ok {
+			domain.Type = constant.PrivateDomain
+			fullDomainsList = append(fullDomainsList, domain)
+		} else {
+			return ccerror.UnknownObjectInListError{
+				Expected:   Domain{},
+				Unexpected: item,
+			}
+		}
+		return nil
+	})
+
+	return fullDomainsList, warnings, err
 }
 
 // GetPrivateDomain returns the Private Domain associated with the provided
@@ -88,7 +127,7 @@ func (client *Client) GetPrivateDomain(domainGUID string) (Domain, Warnings, err
 
 	var domain Domain
 	response := cloudcontroller.Response{
-		Result: &domain,
+		DecodeJSONResponseInto: &domain,
 	}
 
 	err = client.connection.Make(request, &response)
@@ -127,6 +166,31 @@ func (client *Client) GetPrivateDomains(filters ...Filter) ([]Domain, Warnings, 
 	return fullDomainsList, warnings, err
 }
 
+// GetSharedDomain returns the Shared Domain associated with the provided
+// Domain GUID.
+func (client *Client) GetSharedDomain(domainGUID string) (Domain, Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.GetSharedDomainRequest,
+		URIParams:   map[string]string{"shared_domain_guid": domainGUID},
+	})
+	if err != nil {
+		return Domain{}, nil, err
+	}
+
+	var domain Domain
+	response := cloudcontroller.Response{
+		DecodeJSONResponseInto: &domain,
+	}
+
+	err = client.connection.Make(request, &response)
+	if err != nil {
+		return Domain{}, response.Warnings, err
+	}
+
+	domain.Type = constant.SharedDomain
+	return domain, response.Warnings, nil
+}
+
 // GetSharedDomains returns the global shared domains.
 func (client *Client) GetSharedDomains(filters ...Filter) ([]Domain, Warnings, error) {
 	request, err := client.newHTTPRequest(requestOptions{
@@ -141,34 +205,6 @@ func (client *Client) GetSharedDomains(filters ...Filter) ([]Domain, Warnings, e
 	warnings, err := client.paginate(request, Domain{}, func(item interface{}) error {
 		if domain, ok := item.(Domain); ok {
 			domain.Type = constant.SharedDomain
-			fullDomainsList = append(fullDomainsList, domain)
-		} else {
-			return ccerror.UnknownObjectInListError{
-				Expected:   Domain{},
-				Unexpected: item,
-			}
-		}
-		return nil
-	})
-
-	return fullDomainsList, warnings, err
-}
-
-// GetOrganizationPrivateDomains returns the private domains associated with an organization.
-func (client *Client) GetOrganizationPrivateDomains(orgGUID string, filters ...Filter) ([]Domain, Warnings, error) {
-	request, err := client.newHTTPRequest(requestOptions{
-		RequestName: internal.GetOrganizationPrivateDomainsRequest,
-		Query:       ConvertFilterParameters(filters),
-		URIParams:   map[string]string{"organization_guid": orgGUID},
-	})
-	if err != nil {
-		return []Domain{}, nil, err
-	}
-
-	fullDomainsList := []Domain{}
-	warnings, err := client.paginate(request, Domain{}, func(item interface{}) error {
-		if domain, ok := item.(Domain); ok {
-			domain.Type = constant.PrivateDomain
 			fullDomainsList = append(fullDomainsList, domain)
 		} else {
 			return ccerror.UnknownObjectInListError{

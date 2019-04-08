@@ -11,7 +11,9 @@ import (
 	"code.cloudfoundry.org/cli/api/uaa"
 	. "code.cloudfoundry.org/cli/command/translatableerror"
 	"code.cloudfoundry.org/cli/util/clissh/ssherror"
+	"code.cloudfoundry.org/cli/util/download"
 	"code.cloudfoundry.org/cli/util/manifest"
+	"code.cloudfoundry.org/cli/util/manifestparser"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -46,9 +48,25 @@ var _ = Describe("ConvertToTranslatableError", func() {
 			actionerror.AppNotFoundInManifestError{Name: "some-app"},
 			AppNotFoundInManifestError{Name: "some-app"}),
 
+		Entry("manifestparse.AppNotInManifestError -> AppNotFoundInManifestError",
+			manifestparser.AppNotInManifestError{Name: "some-app"},
+			AppNotFoundInManifestError{Name: "some-app"}),
+
 		Entry("actionerror.AssignDropletError -> AssignDropletError",
 			actionerror.AssignDropletError{Message: "some-message"},
 			AssignDropletError{Message: "some-message"}),
+
+		Entry("actionerror.ServicePlanNotFoundError -> ServicePlanNotFoundError",
+			actionerror.ServicePlanNotFoundError{PlanName: "some-plan", ServiceName: "some-service"},
+			ServicePlanNotFoundError{PlanName: "some-plan", ServiceName: "some-service"}),
+
+		Entry("actionerror.BuildpackNotFoundError -> BuildpackNotFoundError",
+			actionerror.BuildpackNotFoundError{},
+			BuildpackNotFoundError{}),
+
+		Entry("actionerror.BuildpackStackChangeError-> BuildpackStackChangeError",
+			actionerror.BuildpackStackChangeError{},
+			BuildpackStackChangeError{}),
 
 		Entry("actionerror.CommandLineOptionsWithMultipleAppsError -> CommandLineArgsWithMultipleAppsError",
 			actionerror.CommandLineOptionsWithMultipleAppsError{},
@@ -62,13 +80,22 @@ var _ = Describe("ConvertToTranslatableError", func() {
 			actionerror.DomainNotFoundError{Name: "some-domain-name", GUID: "some-domain-guid"},
 			DomainNotFoundError{Name: "some-domain-name", GUID: "some-domain-guid"}),
 
+		Entry("actionerror.EmptyBuildpacksError -> EmptyBuildpacksError",
+			manifest.EmptyBuildpacksError{},
+			EmptyBuildpacksError{},
+		),
+
+		Entry("actionerror.EmptyArchiveError -> EmptyDirectoryError",
+			actionerror.EmptyArchiveError{Path: "some-filename"},
+			EmptyDirectoryError{Path: "some-filename"}),
+
 		Entry("actionerror.EmptyDirectoryError -> EmptyDirectoryError",
 			actionerror.EmptyDirectoryError{Path: "some-filename"},
 			EmptyDirectoryError{Path: "some-filename"}),
 
-		Entry("actionerror.EmptyDirectoryError -> EmptyDirectoryError",
-			actionerror.EmptyDirectoryError{Path: "some-path"},
-			EmptyDirectoryError{Path: "some-path"}),
+		Entry("actionerror.EmptyBuildpackDirectoryError -> EmptyBuildpackDirectoryError",
+			actionerror.EmptyBuildpackDirectoryError{Path: "some-path"},
+			EmptyBuildpackDirectoryError{Path: "some-path"}),
 
 		Entry("actionerror.FileChangedError -> FileChangedError",
 			actionerror.FileChangedError{Filename: "some-filename"},
@@ -86,6 +113,10 @@ var _ = Describe("ConvertToTranslatableError", func() {
 			actionerror.HTTPHealthCheckInvalidError{},
 			HTTPHealthCheckInvalidError{}),
 
+		Entry("actionerror.InvalidBuildpacksError -> InvalidBuildpacksError",
+			actionerror.InvalidBuildpacksError{},
+			InvalidBuildpacksError{}),
+
 		Entry("actionerror.InvalidHTTPRouteSettings -> PortNotAllowedWithHTTPDomainError",
 			actionerror.InvalidHTTPRouteSettings{Domain: "some-domain"},
 			PortNotAllowedWithHTTPDomainError{Domain: "some-domain"}),
@@ -98,9 +129,13 @@ var _ = Describe("ConvertToTranslatableError", func() {
 			actionerror.InvalidTCPRouteSettings{Domain: "some-domain"},
 			HostAndPathNotAllowedWithTCPDomainError{Domain: "some-domain"}),
 
-		Entry("actionerror.MissingNameError -> RequiredNameForPushError",
+		Entry("actionerror.MissingNameError -> AppNameOrManifestRequiredError",
 			actionerror.MissingNameError{},
-			RequiredNameForPushError{}),
+			AppNameOrManifestRequiredError{}),
+
+		Entry("actionerror.MultipleBuildpacksFoundError -> MultipleBuildpacksFoundError",
+			actionerror.MultipleBuildpacksFoundError{BuildpackName: "some-bp-name"},
+			MultipleBuildpacksFoundError{BuildpackName: "some-bp-name"}),
 
 		Entry("actionerror.NoCompatibleBinaryError -> NoCompatibleBinaryError",
 			actionerror.NoCompatibleBinaryError{},
@@ -122,6 +157,10 @@ var _ = Describe("ConvertToTranslatableError", func() {
 			actionerror.NonexistentAppPathError{Path: "some-path"},
 			FileNotFoundError{Path: "some-path"}),
 
+		Entry("manifestparser.InvalidManifestApplicationPathError -> FileNotFoundError",
+			manifestparser.InvalidManifestApplicationPathError{Path: "some-path"},
+			FileNotFoundError{Path: "some-path"}),
+
 		Entry("actionerror.NoOrganizationTargetedError -> NoOrganizationTargetedError",
 			actionerror.NoOrganizationTargetedError{BinaryName: "faceman"},
 			NoOrganizationTargetedError{BinaryName: "faceman"}),
@@ -137,6 +176,10 @@ var _ = Describe("ConvertToTranslatableError", func() {
 		Entry("actionerror.OrganizationNotFoundError -> OrgNotFoundError",
 			actionerror.OrganizationNotFoundError{Name: "some-org"},
 			OrganizationNotFoundError{Name: "some-org"}),
+
+		Entry("actionerror.OrganizationQuotaNotFoundForNameError -> OrganizationQuotaNotFoundForNameError",
+			actionerror.OrganizationQuotaNotFoundForNameError{Name: "some-quota"},
+			OrganizationQuotaNotFoundForNameError{Name: "some-quota"}),
 
 		Entry("actionerror.PasswordGrantTypeLogoutRequiredError -> PasswordGrantTypeLogoutRequiredError",
 			actionerror.PasswordGrantTypeLogoutRequiredError{},
@@ -200,6 +243,11 @@ var _ = Describe("ConvertToTranslatableError", func() {
 			actionerror.RoutePathWithTCPDomainError{},
 			RoutePathWithTCPDomainError{}),
 
+		Entry("actionerror.RouterGroupNotFoundError -> RouterGroupNotFoundError",
+			actionerror.RouterGroupNotFoundError{Name: "some-group"},
+			RouterGroupNotFoundError{Name: "some-group"},
+		),
+
 		Entry("actionerror.SecurityGroupNotFoundError -> SecurityGroupNotFoundError",
 			actionerror.SecurityGroupNotFoundError{Name: "some-security-group"},
 			SecurityGroupNotFoundError{Name: "some-security-group"}),
@@ -223,6 +271,10 @@ var _ = Describe("ConvertToTranslatableError", func() {
 		Entry("actionerror.SpaceNotFoundError -> SpaceNotFoundError",
 			actionerror.SpaceNotFoundError{Name: "some-space"},
 			SpaceNotFoundError{Name: "some-space"}),
+
+		Entry("actionerror.SpaceQuotaNotFoundByNameError -> SpaceQuotaNotFoundByNameError",
+			actionerror.SpaceQuotaNotFoundByNameError{Name: "some-space"},
+			SpaceQuotaNotFoundByNameError{Name: "some-space"}),
 
 		Entry("actionerror.StackNotFoundError -> StackNotFoundError",
 			actionerror.StackNotFoundError{Name: "some-stack-name", GUID: "some-stack-guid"},
@@ -262,18 +314,42 @@ var _ = Describe("ConvertToTranslatableError", func() {
 			actionerror.ServiceInstanceNotSharedToSpaceError{ServiceInstanceName: "some-service-instance-name"},
 			ServiceInstanceNotSharedToSpaceError{ServiceInstanceName: "some-service-instance-name"}),
 
+		Entry("TipDecoratorError calls translates error on base error",
+			TipDecoratorError{BaseError: ccerror.APINotFoundError{URL: "some-url"}},
+			TipDecoratorError{BaseError: APINotFoundError{URL: "some-url"}}),
+
 		// CC Errors
 		Entry("ccerror.APINotFoundError -> APINotFoundError",
 			ccerror.APINotFoundError{URL: "some-url"},
 			APINotFoundError{URL: "some-url"}),
 
-		Entry("ccerror.JobFailedError -> JobFailedError",
-			ccerror.JobFailedError{JobGUID: "some-job-guid", Message: "some-message"},
+		Entry("ccerror.V2JobFailedError -> V2JobFailedError",
+			ccerror.V2JobFailedError{JobGUID: "some-job-guid", Message: "some-message"},
 			JobFailedError{JobGUID: "some-job-guid", Message: "some-message"}),
+
+		Entry("ccerror.V3JobFailedError -> V3JobFailedError",
+			ccerror.V3JobFailedError{JobGUID: "some-job-guid", Detail: "some-detail"},
+			JobFailedError{JobGUID: "some-job-guid", Message: "some-detail"}),
 
 		Entry("ccerror.JobTimeoutError -> JobTimeoutError",
 			ccerror.JobTimeoutError{JobGUID: "some-job-guid"},
 			JobTimeoutError{JobGUID: "some-job-guid"}),
+
+		Entry("ccerror.MultiError -> MultiError",
+			ccerror.MultiError{ResponseCode: 418, Errors: []ccerror.V3Error{
+				{
+					Code:   282010,
+					Detail: "detail 1",
+					Title:  "title-1",
+				},
+				{
+					Code:   10242013,
+					Detail: "detail 2",
+					Title:  "title-2",
+				},
+			}},
+			MultiError{Messages: []string{"detail 1", "detail 2"}},
+		),
 
 		Entry("ccerror.RequestError -> APIRequestError",
 			ccerror.RequestError{Err: err},
@@ -300,6 +376,11 @@ var _ = Describe("ConvertToTranslatableError", func() {
 			unprocessableEntityError,
 			unprocessableEntityError),
 
+		Entry("download.RawHTTPStatusError -> HTTPStatusError",
+			download.RawHTTPStatusError{Status: "some status"},
+			HTTPStatusError{Status: "some status"},
+		),
+
 		Entry("json.SyntaxError -> JSONSyntaxError",
 			jsonErr,
 			JSONSyntaxError{Err: jsonErr},
@@ -322,6 +403,14 @@ var _ = Describe("ConvertToTranslatableError", func() {
 			manifest.InterpolationError{Err: errors.New("an-error")},
 			InterpolationError{Err: errors.New("an-error")}),
 
+		Entry("manifestparser.InterpolationError -> InterpolationError",
+			manifestparser.InterpolationError{Err: errors.New("an-error")},
+			InterpolationError{Err: errors.New("an-error")}),
+
+		Entry("manifestparser.InvalidYAMLError -> InvalidYAMLError",
+			manifestparser.InvalidYAMLError{Err: errors.New("an-error")},
+			InvalidYAMLError{Err: errors.New("an-error")}),
+
 		// Plugin Errors
 		Entry("pluginerror.RawHTTPStatusError -> DownloadPluginHTTPError",
 			pluginerror.RawHTTPStatusError{Status: "some status"},
@@ -343,8 +432,12 @@ var _ = Describe("ConvertToTranslatableError", func() {
 
 		// UAA Errors
 		Entry("uaa.BadCredentialsError -> BadCredentialsError",
-			uaa.BadCredentialsError{},
-			BadCredentialsError{}),
+			uaa.UnauthorizedError{Message: "some message"},
+			UnauthorizedError{Message: "some message"}),
+
+		Entry("uaa.AccountLockedError -> AccountLockedError",
+			uaa.AccountLockedError{Message: "locked out"},
+			AccountLockedError{Message: "locked out"}),
 
 		Entry("uaa.InsufficientScopeError -> UnauthorizedToPerformActionError",
 			uaa.InsufficientScopeError{},

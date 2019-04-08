@@ -47,6 +47,8 @@ type ServiceBroker struct {
 	Service    struct {
 		Name            string `json:"name"`
 		ID              string `json:"id"`
+		Bindable        bool   `json:"bindable"`
+		Requires        string `json:"-"`
 		DashboardClient struct {
 			ID          string `json:"id"`
 			Secret      string `json:"secret"`
@@ -64,6 +66,8 @@ func NewServiceBroker(name string, path string, appsDomain string, serviceName s
 	b.AppsDomain = appsDomain
 	b.Service.Name = serviceName
 	b.Service.ID = RandomName()
+	b.Service.Bindable = true
+	b.Service.Requires = `[]`
 	b.SyncPlans = []Plan{
 		{Name: planName, ID: RandomName()},
 		{Name: RandomName(), ID: RandomName()},
@@ -71,6 +75,31 @@ func NewServiceBroker(name string, path string, appsDomain string, serviceName s
 	b.AsyncPlans = []Plan{
 		{Name: RandomName(), ID: RandomName()},
 		{Name: RandomName(), ID: RandomName()},
+		{Name: RandomName(), ID: RandomName()}, // accepts_incomplete = true
+	}
+	b.Service.DashboardClient.ID = RandomName()
+	b.Service.DashboardClient.Secret = RandomName()
+	b.Service.DashboardClient.RedirectUri = RandomName()
+	return b
+}
+
+func NewAsynchServiceBroker(name string, path string, appsDomain string, serviceName string, planName string) ServiceBroker {
+	b := ServiceBroker{}
+	b.Path = path
+	b.Name = name
+	b.AppsDomain = appsDomain
+	b.Service.Name = serviceName
+	b.Service.ID = RandomName()
+	b.Service.Bindable = true
+	b.Service.Requires = `[]`
+	b.SyncPlans = []Plan{
+		{Name: RandomName(), ID: RandomName()},
+		{Name: RandomName(), ID: RandomName()},
+	}
+	b.AsyncPlans = []Plan{
+		{Name: RandomName(), ID: RandomName()},
+		{Name: RandomName(), ID: RandomName()},
+		{Name: planName, ID: RandomName()}, // accepts_incomplete = true
 	}
 	b.Service.DashboardClient.ID = RandomName()
 	b.Service.DashboardClient.Secret = RandomName()
@@ -84,7 +113,14 @@ func (b ServiceBroker) Push() {
 		"--no-start",
 		"-m", DefaultMemoryLimit,
 		"-p", b.Path,
-		"-d", b.AppsDomain,
+		"--no-route",
+	)).Should(Exit(0))
+
+	Eventually(CF(
+		"map-route",
+		b.Name,
+		b.AppsDomain,
+		"--hostname", b.Name,
 	)).Should(Exit(0))
 
 	Eventually(CF("start", b.Name)).Should(Exit(0))
@@ -120,13 +156,13 @@ func (b ServiceBroker) Delete() {
 }
 
 func (b ServiceBroker) Destroy() {
-	Eventually(CF("purge-service-offering", b.Service.Name, "-f")).Should(Exit(0))
+	Eventually(CF("purge-service-offering", b.Service.Name, "-b", b.Name, "-f")).Should(Exit(0))
 	b.Delete()
 	Eventually(CF("delete", b.Name, "-f", "-r")).Should(Exit(0))
 }
 
 func (b ServiceBroker) ToJSON(shareable bool) string {
-	bytes, err := ioutil.ReadFile(NewAssets().ServiceBroker + "/cats.json")
+	bytes, err := ioutil.ReadFile(NewAssets().ServiceBroker + "/broker_config.json")
 	Expect(err).To(BeNil())
 
 	planSchema, err := json.Marshal(b.SyncPlans[0].Schemas)
@@ -146,20 +182,26 @@ func (b ServiceBroker) ToJSON(shareable bool) string {
 		"<fake-async-plan-guid>", b.AsyncPlans[0].ID,
 		"<fake-async-plan-2>", b.AsyncPlans[1].Name,
 		"<fake-async-plan-2-guid>", b.AsyncPlans[1].ID,
+		"<fake-async-plan-3>", b.AsyncPlans[2].Name,
+		"<fake-async-plan-3-guid>", b.AsyncPlans[2].ID,
 		"\"<fake-plan-schema>\"", string(planSchema),
 		"\"<shareable-service>\"", fmt.Sprintf("%t", shareable),
+		"\"<bindable>\"", fmt.Sprintf("%t", b.Service.Bindable),
+		"\"<requires>\"", b.Service.Requires,
 	)
 
 	return replacer.Replace(string(bytes))
 }
 
-func GetAppGuid(appName string) string {
-	session := CF("app", appName, "--guid")
-	Eventually(session).Should(Exit(0))
+func CreateBroker(domain, serviceName, planName string) ServiceBroker {
+	service := serviceName
+	servicePlan := planName
+	broker := NewServiceBroker(NewServiceBrokerName(), NewAssets().ServiceBroker, domain, service, servicePlan)
+	broker.Push()
+	broker.Configure(true)
+	broker.Create()
 
-	appGuid := strings.TrimSpace(string(session.Out.Contents()))
-	Expect(appGuid).NotTo(Equal(""))
-	return appGuid
+	return broker
 }
 
 type Assets struct {
@@ -168,6 +210,6 @@ type Assets struct {
 
 func NewAssets() Assets {
 	return Assets{
-		ServiceBroker: "../assets/service_broker",
+		ServiceBroker: "../../assets/service_broker",
 	}
 }

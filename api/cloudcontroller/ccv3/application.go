@@ -8,87 +8,134 @@ import (
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/constant"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/internal"
+	"code.cloudfoundry.org/cli/types"
 )
 
 // Application represents a Cloud Controller V3 Application.
 type Application struct {
 	// GUID is the unique application identifier.
-	GUID string `json:"guid,omitempty"`
+	GUID string
+	// StackName is the name of the stack on which the application runs.
+	StackName string
 	// LifecycleBuildpacks is a list of the names of buildpacks.
-	LifecycleBuildpacks []string `json:"-"`
+	LifecycleBuildpacks []string
 	// LifecycleType is the type of the lifecycle.
-	LifecycleType constant.AppLifecycleType `json:"-"`
+	LifecycleType constant.AppLifecycleType
+	// Metadata is used for custom tagging of API resources
+	Metadata struct {
+		Labels map[string]types.NullString `json:"labels,omitempty"`
+	}
 	// Name is the name given to the application.
-	Name string `json:"name,omitempty"`
+	Name string
 	// Relationships list the relationships to the application.
-	Relationships Relationships `json:"relationships,omitempty"`
+	Relationships Relationships
 	// State is the desired state of the application.
-	State constant.ApplicationState `json:"state,omitempty"`
+	State constant.ApplicationState
 }
 
 // MarshalJSON converts an Application into a Cloud Controller Application.
 func (a Application) MarshalJSON() ([]byte, error) {
-	type rawApp Application
-	var ccApp struct {
-		Lifecycle map[string]interface{} `json:"lifecycle,omitempty"`
-
-		rawApp
+	ccApp := ccApplication{
+		Name:          a.Name,
+		Relationships: a.Relationships,
 	}
 
-	ccApp.rawApp = (rawApp)(a)
+	if len(a.Metadata.Labels) != 0 {
+		ccApp.Metadata = &a.Metadata
+	}
 
-	switch a.LifecycleType {
-	case constant.AppLifecycleTypeBuildpack:
-		if len(a.LifecycleBuildpacks) > 0 {
-			ccApp.Lifecycle = map[string]interface{}{}
-			ccApp.Lifecycle["type"] = a.LifecycleType
-			ccApp.Lifecycle["data"] = map[string]interface{}{}
-			switch a.LifecycleBuildpacks[0] {
-			case "default", "null":
-				ccApp.Lifecycle["data"] = map[string][]string{
-					"buildpacks": nil,
-				}
-			default:
-				ccApp.Lifecycle["data"] = map[string][]string{
-					"buildpacks": a.LifecycleBuildpacks,
-				}
+	if a.LifecycleType == constant.AppLifecycleTypeDocker {
+		ccApp.setDockerLifecycle()
+	} else if a.LifecycleType == constant.AppLifecycleTypeBuildpack {
+		if len(a.LifecycleBuildpacks) > 0 || a.StackName != "" {
+			if a.hasAutodetectedBuildpack() {
+				ccApp.setAutodetectedBuildpackLifecycle(a)
+			} else {
+				ccApp.setBuildpackLifecycle(a)
 			}
 		}
-	case constant.AppLifecycleTypeDocker:
-		ccApp.Lifecycle = map[string]interface{}{}
-		ccApp.Lifecycle["type"] = a.LifecycleType
-		ccApp.Lifecycle["data"] = map[string]interface{}{}
 	}
 
-	ccApp.GUID = ""
 	return json.Marshal(ccApp)
 }
 
 // UnmarshalJSON helps unmarshal a Cloud Controller Application response.
 func (a *Application) UnmarshalJSON(data []byte) error {
-	type rawApp Application
-	var ccApp struct {
-		*rawApp
-
-		Lifecycle struct {
-			Type constant.AppLifecycleType
-			Data struct {
-				Buildpacks []string
-			}
-		}
+	lifecycle := ccLifecycle{}
+	ccApp := ccApplication{
+		Lifecycle: &lifecycle,
 	}
-
-	ccApp.rawApp = (*rawApp)(a)
 
 	err := cloudcontroller.DecodeJSON(data, &ccApp)
 	if err != nil {
 		return err
 	}
 
-	a.LifecycleType = ccApp.Lifecycle.Type
-	a.LifecycleBuildpacks = ccApp.Lifecycle.Data.Buildpacks
+	a.GUID = ccApp.GUID
+	a.StackName = lifecycle.Data.Stack
+	a.LifecycleBuildpacks = lifecycle.Data.Buildpacks
+	a.LifecycleType = lifecycle.Type
+	a.Name = ccApp.Name
+	a.Relationships = ccApp.Relationships
+	a.State = ccApp.State
+	if ccApp.Metadata != nil {
+		a.Metadata = *ccApp.Metadata
+	}
 
 	return nil
+}
+
+func (a Application) hasAutodetectedBuildpack() bool {
+	if len(a.LifecycleBuildpacks) == 0 {
+		return false
+	}
+	return a.LifecycleBuildpacks[0] == constant.AutodetectBuildpackValueDefault || a.LifecycleBuildpacks[0] == constant.AutodetectBuildpackValueNull
+}
+
+type ccLifecycle struct {
+	Type constant.AppLifecycleType `json:"type,omitempty"`
+	Data struct {
+		Buildpacks []string `json:"buildpacks,omitempty"`
+		Stack      string   `json:"stack,omitempty"`
+	} `json:"data"`
+}
+
+type ccApplication struct {
+	Name          string                    `json:"name,omitempty"`
+	Relationships Relationships             `json:"relationships,omitempty"`
+	Lifecycle     interface{}               `json:"lifecycle,omitempty"`
+	GUID          string                    `json:"guid,omitempty"`
+	State         constant.ApplicationState `json:"state,omitempty"`
+	Metadata      *struct {
+		Labels map[string]types.NullString `json:"labels,omitempty"`
+	} `json:"metadata,omitempty"`
+}
+
+func (ccApp *ccApplication) setAutodetectedBuildpackLifecycle(a Application) {
+	var nullBuildpackLifecycle struct {
+		Type constant.AppLifecycleType `json:"type,omitempty"`
+		Data struct {
+			Buildpacks []string `json:"buildpacks"`
+			Stack      string   `json:"stack,omitempty"`
+		} `json:"data"`
+	}
+	nullBuildpackLifecycle.Type = constant.AppLifecycleTypeBuildpack
+	nullBuildpackLifecycle.Data.Stack = a.StackName
+	ccApp.Lifecycle = nullBuildpackLifecycle
+}
+
+func (ccApp *ccApplication) setBuildpackLifecycle(a Application) {
+	var lifecycle ccLifecycle
+	lifecycle.Type = a.LifecycleType
+	lifecycle.Data.Buildpacks = a.LifecycleBuildpacks
+	lifecycle.Data.Stack = a.StackName
+	ccApp.Lifecycle = lifecycle
+}
+
+func (ccApp *ccApplication) setDockerLifecycle() {
+	ccApp.Lifecycle = ccLifecycle{
+		Type: constant.AppLifecycleTypeDocker,
+	}
 }
 
 // CreateApplication creates an application with the given settings.
@@ -108,7 +155,7 @@ func (client *Client) CreateApplication(app Application) (Application, Warnings,
 
 	var responseApp Application
 	response := cloudcontroller.Response{
-		Result: &responseApp,
+		DecodeJSONResponseInto: &responseApp,
 	}
 	err = client.connection.Make(request, &response)
 
@@ -159,7 +206,26 @@ func (client *Client) UpdateApplication(app Application) (Application, Warnings,
 
 	var responseApp Application
 	response := cloudcontroller.Response{
-		Result: &responseApp,
+		DecodeJSONResponseInto: &responseApp,
+	}
+	err = client.connection.Make(request, &response)
+
+	return responseApp, response.Warnings, err
+}
+
+// UpdateApplicationRestart restarts the given application.
+func (client *Client) UpdateApplicationRestart(appGUID string) (Application, Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.PostApplicationActionRestartRequest,
+		URIParams:   map[string]string{"app_guid": appGUID},
+	})
+	if err != nil {
+		return Application{}, nil, err
+	}
+
+	var responseApp Application
+	response := cloudcontroller.Response{
+		DecodeJSONResponseInto: &responseApp,
 	}
 	err = client.connection.Make(request, &response)
 
@@ -178,7 +244,7 @@ func (client *Client) UpdateApplicationStart(appGUID string) (Application, Warni
 
 	var responseApp Application
 	response := cloudcontroller.Response{
-		Result: &responseApp,
+		DecodeJSONResponseInto: &responseApp,
 	}
 	err = client.connection.Make(request, &response)
 
@@ -197,7 +263,7 @@ func (client *Client) UpdateApplicationStop(appGUID string) (Application, Warnin
 
 	var responseApp Application
 	response := cloudcontroller.Response{
-		Result: &responseApp,
+		DecodeJSONResponseInto: &responseApp,
 	}
 	err = client.connection.Make(request, &response)
 

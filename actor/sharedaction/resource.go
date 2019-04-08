@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3"
+
 	"code.cloudfoundry.org/cli/actor/actionerror"
 	"code.cloudfoundry.org/ykk"
 	ignore "github.com/sabhiram/go-gitignore"
@@ -39,6 +41,28 @@ type Resource struct {
 	Mode     os.FileMode `json:"mode"`
 	SHA1     string      `json:"sha1"`
 	Size     int64       `json:"size"`
+}
+
+type V3Resource ccv3.Resource
+
+// Translate shared action Resource to V3 Resource format
+func (r Resource) ToV3Resource() V3Resource {
+	return V3Resource{
+		FilePath:    r.Filename,
+		Mode:        r.Mode,
+		Checksum:    ccv3.Checksum{Value: r.SHA1},
+		SizeInBytes: r.Size,
+	}
+}
+
+// Translate shared action Resource to V3 Resource format
+func (r V3Resource) ToV2Resource() Resource {
+	return Resource{
+		Filename: r.FilePath,
+		Mode:     r.Mode,
+		SHA1:     r.Checksum.Value,
+		Size:     r.SizeInBytes,
+	}
 }
 
 // GatherArchiveResources returns a list of resources for an archive.
@@ -97,6 +121,9 @@ func (actor Actor) GatherArchiveResources(archivePath string) ([]Resource, error
 
 		resources = append(resources, resource)
 	}
+	if len(resources) <= 1 {
+		return nil, actionerror.EmptyArchiveError{Path: archivePath}
+	}
 	return resources, nil
 }
 
@@ -129,7 +156,7 @@ func (actor Actor) GatherDirectoryResources(sourceDir string) ([]Resource, error
 			return err
 		}
 
-		// if file ignored contine to the next file
+		// if file ignored continue to the next file
 		if gitIgnore.MatchesPath(relPath) {
 			return nil
 		}
@@ -277,11 +304,11 @@ func (actor Actor) ZipDirectoryResources(sourceDir string, filesToInclude []Reso
 			}
 		} else {
 			srcFile, err := os.Open(fullPath)
-			defer srcFile.Close()
 			if err != nil {
 				log.WithField("fullPath", fullPath).Errorln("opening path in dir:", err)
 				return zipPath, err
 			}
+			defer srcFile.Close()
 
 			err = actor.addFileToZipFromFileSystem(
 				fullPath, srcFile, fileInfo,
@@ -389,7 +416,10 @@ func (Actor) addFileToZipFromFileSystem(srcPath string,
 			return actionerror.FileChangedError{Filename: srcPath}
 		}
 	} else if fileInfo.Mode()&os.ModeSymlink == os.ModeSymlink {
-		io.Copy(destFileWriter, srcFile)
+		_, err = io.Copy(destFileWriter, srcFile)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -417,6 +447,10 @@ func (Actor) generateArchiveCFIgnoreMatcher(files []*zip.File) (*ignore.GitIgnor
 
 func (actor Actor) generateDirectoryCFIgnoreMatcher(sourceDir string) (*ignore.GitIgnore, error) {
 	pathToCFIgnore := filepath.Join(sourceDir, ".cfignore")
+	log.WithFields(log.Fields{
+		"pathToCFIgnore": pathToCFIgnore,
+		"sourceDir":      sourceDir,
+	}).Debug("using ignore file")
 
 	additionalIgnoreLines := DefaultIgnoreLines
 
@@ -428,11 +462,12 @@ func (actor Actor) generateDirectoryCFIgnoreMatcher(sourceDir string) (*ignore.G
 		}
 	}
 
+	log.Debugf("ignore rules: %v", additionalIgnoreLines)
+
 	if _, err := os.Stat(pathToCFIgnore); !os.IsNotExist(err) {
 		return ignore.CompileIgnoreFileAndLines(pathToCFIgnore, additionalIgnoreLines...)
-	} else {
-		return ignore.CompileIgnoreLines(additionalIgnoreLines...)
 	}
+	return ignore.CompileIgnoreLines(additionalIgnoreLines...)
 }
 
 func (Actor) findInResources(path string, filesToInclude []Resource) (Resource, bool) {
@@ -454,4 +489,28 @@ func (Actor) newArchiveReader(archive *os.File) (*zip.Reader, error) {
 	}
 
 	return ykk.NewReader(archive, info.Size())
+}
+
+func (actor Actor) CreateArchive(bitsPath string, resources []Resource) (io.ReadCloser, int64, error) {
+	archivePath, err := actor.ZipDirectoryResources(bitsPath, resources)
+	_ = err
+
+	return actor.ReadArchive(archivePath)
+}
+
+func (Actor) ReadArchive(archivePath string) (io.ReadCloser, int64, error) {
+	archive, err := os.Open(archivePath)
+	if err != nil {
+		log.WithField("archivePath", archivePath).Errorln("opening temp archive:", err)
+		return nil, -1, err
+	}
+
+	archiveInfo, err := archive.Stat()
+	if err != nil {
+		archive.Close()
+		log.WithField("archivePath", archivePath).Errorln("stat temp archive:", err)
+		return nil, -1, err
+	}
+
+	return archive, archiveInfo.Size(), nil
 }

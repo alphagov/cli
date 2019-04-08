@@ -17,7 +17,7 @@ var _ = Describe("Isolation Segments", func() {
 	)
 
 	BeforeEach(func() {
-		client = NewTestClient()
+		client, _ = NewTestClient()
 	})
 
 	Describe("CreateIsolationSegment", func() {
@@ -34,7 +34,7 @@ var _ = Describe("Isolation Segments", func() {
 			name = "an_isolation_segment"
 		})
 
-		Context("when the segment does not exist", func() {
+		When("the segment does not exist", func() {
 			BeforeEach(func() {
 				response := `{
 					"guid": "some-guid",
@@ -65,10 +65,15 @@ var _ = Describe("Isolation Segments", func() {
 			})
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
 					"errors": [
+						{
+							"code": 10008,
+							"detail": "The request is semantically invalid: command presence",
+							"title": "CF-UnprocessableEntity"
+						},
 						{
 							"code": 10008,
 							"detail": "The request is semantically invalid: command presence",
@@ -85,15 +90,18 @@ var _ = Describe("Isolation Segments", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
 						},
 					},
 				}))
@@ -119,7 +127,7 @@ var _ = Describe("Isolation Segments", func() {
 			segments, warnings, executeErr = client.GetIsolationSegments(queries...)
 		})
 
-		Context("when the isolation segments exist", func() {
+		When("the isolation segments exist", func() {
 			BeforeEach(func() {
 				response1 := fmt.Sprintf(`{
 					"pagination": {
@@ -175,7 +183,7 @@ var _ = Describe("Isolation Segments", func() {
 			})
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
 					"errors": [
@@ -200,20 +208,18 @@ var _ = Describe("Isolation Segments", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -233,7 +239,7 @@ var _ = Describe("Isolation Segments", func() {
 			isolationSegment, warnings, executeErr = client.GetIsolationSegment("some-iso-guid")
 		})
 
-		Context("when the isolation segment exists", func() {
+		When("the isolation segment exists", func() {
 			BeforeEach(func() {
 				response := `{
 					"guid": "some-iso-guid",
@@ -257,7 +263,7 @@ var _ = Describe("Isolation Segments", func() {
 			})
 		})
 
-		Context("when the isolation segment does not exist", func() {
+		When("the isolation segment does not exist", func() {
 			BeforeEach(func() {
 				response := `
 				{
@@ -283,7 +289,7 @@ var _ = Describe("Isolation Segments", func() {
 			})
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
 					"errors": [
@@ -308,20 +314,18 @@ var _ = Describe("Isolation Segments", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "Isolation Segment not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "Isolation Segment not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -340,7 +344,7 @@ var _ = Describe("Isolation Segments", func() {
 			warnings, executeErr = client.DeleteIsolationSegment("some-iso-guid")
 		})
 
-		Context("when the delete is successful", func() {
+		When("the delete is successful", func() {
 			BeforeEach(func() {
 				server.AppendHandlers(
 					CombineHandlers(
@@ -356,7 +360,7 @@ var _ = Describe("Isolation Segments", func() {
 			})
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
 					"errors": [
@@ -381,20 +385,18 @@ var _ = Describe("Isolation Segments", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))

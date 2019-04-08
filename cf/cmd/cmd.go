@@ -14,14 +14,15 @@ import (
 	"code.cloudfoundry.org/cli/cf/configuration/confighelpers"
 	"code.cloudfoundry.org/cli/cf/configuration/coreconfig"
 	"code.cloudfoundry.org/cli/cf/configuration/pluginconfig"
+	"code.cloudfoundry.org/cli/cf/errors"
 	"code.cloudfoundry.org/cli/cf/flags"
 	. "code.cloudfoundry.org/cli/cf/i18n"
 	"code.cloudfoundry.org/cli/cf/net"
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/terminal"
 	"code.cloudfoundry.org/cli/cf/trace"
+	"code.cloudfoundry.org/cli/cf/util/spellcheck"
 	"code.cloudfoundry.org/cli/plugin/rpc"
-	"code.cloudfoundry.org/cli/util/spellcheck"
 
 	netrpc "net/rpc"
 )
@@ -121,6 +122,9 @@ func Main(traceEnv string, args []string) {
 		err = cmd.Execute(flagContext)
 		if err != nil {
 			deps.UI.Failed(err.Error())
+			if _, ok := err.(*errors.CurlHTTPError); ok {
+				os.Exit(22)
+			}
 			os.Exit(1)
 		}
 

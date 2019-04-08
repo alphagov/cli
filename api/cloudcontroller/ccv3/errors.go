@@ -8,6 +8,8 @@ import (
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 )
 
+const taskWorkersUnavailable = "CF-TaskWorkersUnavailable"
+
 // errorWrapper is the wrapper that converts responses with 4xx and 5xx status
 // codes to an error.
 type errorWrapper struct {
@@ -16,12 +18,6 @@ type errorWrapper struct {
 
 func newErrorWrapper() *errorWrapper {
 	return new(errorWrapper)
-}
-
-// Wrap wraps a Cloud Controller connection in this error handling wrapper.
-func (e *errorWrapper) Wrap(innerconnection cloudcontroller.Connection) cloudcontroller.Connection {
-	e.connection = innerconnection
-	return e
 }
 
 // Make creates a connection in the wrapped connection and handles errors
@@ -33,15 +29,25 @@ func (e *errorWrapper) Make(request *cloudcontroller.Request, passedResponse *cl
 		if rawHTTPStatusErr.StatusCode >= http.StatusInternalServerError {
 			return convert500(rawHTTPStatusErr)
 		}
-		return convert400(rawHTTPStatusErr)
+		return convert400(rawHTTPStatusErr, request)
 	}
 	return err
 }
 
-func convert400(rawHTTPStatusErr ccerror.RawHTTPStatusError) error {
+// Wrap wraps a Cloud Controller connection in this error handling wrapper.
+func (e *errorWrapper) Wrap(innerconnection cloudcontroller.Connection) cloudcontroller.Connection {
+	e.connection = innerconnection
+	return e
+}
+
+func convert400(rawHTTPStatusErr ccerror.RawHTTPStatusError, request *cloudcontroller.Request) error {
 	firstErr, errorResponse, err := unmarshalFirstV3Error(rawHTTPStatusErr)
 	if err != nil {
 		return err
+	}
+
+	if len(errorResponse.Errors) > 1 {
+		return ccerror.MultiError{Errors: errorResponse.Errors, ResponseCode: rawHTTPStatusErr.StatusCode}
 	}
 
 	switch rawHTTPStatusErr.StatusCode {
@@ -53,11 +59,11 @@ func convert400(rawHTTPStatusErr ccerror.RawHTTPStatusError) error {
 	case http.StatusForbidden: // 403
 		return ccerror.ForbiddenError{Message: firstErr.Detail}
 	case http.StatusNotFound: // 404
-		return handleNotFound(firstErr)
+		return handleNotFound(firstErr, request)
 	case http.StatusUnprocessableEntity: // 422
 		return handleUnprocessableEntity(firstErr)
 	case http.StatusServiceUnavailable: // 503
-		if firstErr.Title == "CF-TaskWorkersUnavailable" {
+		if firstErr.Title == taskWorkersUnavailable {
 			return ccerror.TaskWorkersUnavailableError{Message: firstErr.Detail}
 		}
 		return ccerror.ServiceUnavailableError{Message: firstErr.Detail}
@@ -77,7 +83,7 @@ func convert500(rawHTTPStatusErr ccerror.RawHTTPStatusError) error {
 		if err != nil {
 			return err
 		}
-		if firstErr.Title == "CF-TaskWorkersUnavailable" {
+		if firstErr.Title == taskWorkersUnavailable {
 			return ccerror.TaskWorkersUnavailableError{Message: firstErr.Detail}
 		}
 		return ccerror.ServiceUnavailableError{Message: firstErr.Detail}
@@ -94,42 +100,22 @@ func convert500(rawHTTPStatusErr ccerror.RawHTTPStatusError) error {
 	}
 }
 
-func unmarshalFirstV3Error(rawHTTPStatusErr ccerror.RawHTTPStatusError) (ccerror.V3Error, ccerror.V3ErrorResponse, error) {
-	// Try to unmarshal the raw error into a CC error. If unmarshaling fails,
-	// return the raw error.
-	var errorResponse ccerror.V3ErrorResponse
-	err := json.Unmarshal(rawHTTPStatusErr.RawResponse, &errorResponse)
-	// error parsing json
-	if err != nil {
-		return ccerror.V3Error{}, errorResponse, ccerror.UnknownHTTPSourceError{
-			StatusCode:  rawHTTPStatusErr.StatusCode,
-			RawResponse: rawHTTPStatusErr.RawResponse,
-		}
-	}
-
-	errors := errorResponse.Errors
-	if len(errors) == 0 {
-		return ccerror.V3Error{}, errorResponse, ccerror.V3UnexpectedResponseError{
-			ResponseCode:    rawHTTPStatusErr.StatusCode,
-			V3ErrorResponse: errorResponse,
-		}
-	}
-	// There could be multiple errors in the future but for now we only convert
-	// the first error.
-	firstErr := errors[0]
-	return firstErr, errorResponse, nil
-}
-
-func handleNotFound(errorResponse ccerror.V3Error) error {
+func handleNotFound(errorResponse ccerror.V3Error, request *cloudcontroller.Request) error {
 	switch errorResponse.Detail {
 	case "App not found":
 		return ccerror.ApplicationNotFoundError{}
 	case "Droplet not found":
 		return ccerror.DropletNotFoundError{}
+	case "Deployment not found":
+		return ccerror.DeploymentNotFoundError{}
+	case "Feature flag not found":
+		return ccerror.FeatureFlagNotFoundError{}
 	case "Instance not found":
 		return ccerror.InstanceNotFoundError{}
 	case "Process not found":
 		return ccerror.ProcessNotFoundError{}
+	case "Unknown request":
+		return ccerror.APINotFoundError{URL: request.URL.String()}
 	default:
 		return ccerror.ResourceNotFoundError{Message: errorResponse.Detail}
 	}
@@ -144,4 +130,27 @@ func handleUnprocessableEntity(errorResponse ccerror.V3Error) error {
 	default:
 		return ccerror.UnprocessableEntityError{Message: errorResponse.Detail}
 	}
+}
+
+func unmarshalFirstV3Error(rawHTTPStatusErr ccerror.RawHTTPStatusError) (ccerror.V3Error, ccerror.V3ErrorResponse, error) {
+	// Try to unmarshal the raw error into a CC error. If unmarshaling fails,
+	// return the raw error.
+	var errorResponse ccerror.V3ErrorResponse
+	err := json.Unmarshal(rawHTTPStatusErr.RawResponse, &errorResponse)
+	if err != nil {
+		return ccerror.V3Error{}, errorResponse, ccerror.UnknownHTTPSourceError{
+			StatusCode:  rawHTTPStatusErr.StatusCode,
+			RawResponse: rawHTTPStatusErr.RawResponse,
+		}
+	}
+
+	errors := errorResponse.Errors
+	if len(errors) == 0 {
+		return ccerror.V3Error{}, errorResponse, ccerror.V3UnexpectedResponseError{
+			ResponseCode:    rawHTTPStatusErr.StatusCode,
+			V3ErrorResponse: errorResponse,
+		}
+	}
+
+	return errors[0], errorResponse, nil
 }

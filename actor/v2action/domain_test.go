@@ -29,7 +29,7 @@ var _ = Describe("Domain Actions", func() {
 		var domain Domain
 
 		Describe("IsHTTP", func() {
-			Context("when the RouterGroupType = 'http'", func() {
+			When("the RouterGroupType = 'http'", func() {
 				BeforeEach(func() {
 					domain.RouterGroupType = constant.HTTPRouterGroup
 				})
@@ -39,7 +39,7 @@ var _ = Describe("Domain Actions", func() {
 				})
 			})
 
-			Context("when the RouterGroupType is anything other than 'tcp'", func() {
+			When("the RouterGroupType is anything other than 'tcp'", func() {
 				BeforeEach(func() {
 					domain.RouterGroupType = ""
 				})
@@ -49,7 +49,7 @@ var _ = Describe("Domain Actions", func() {
 				})
 			})
 
-			Context("when the RouterGroupType = 'http'", func() {
+			When("the RouterGroupType = 'http'", func() {
 				BeforeEach(func() {
 					domain.RouterGroupType = constant.TCPRouterGroup
 				})
@@ -61,7 +61,7 @@ var _ = Describe("Domain Actions", func() {
 		})
 
 		Describe("IsTCP", func() {
-			Context("when the RouterGroupType = 'tcp'", func() {
+			When("the RouterGroupType = 'tcp'", func() {
 				BeforeEach(func() {
 					domain.RouterGroupType = constant.TCPRouterGroup
 				})
@@ -71,7 +71,7 @@ var _ = Describe("Domain Actions", func() {
 				})
 			})
 
-			Context("when the RouterGroupType is anything else", func() {
+			When("the RouterGroupType is anything else", func() {
 				BeforeEach(func() {
 					domain.RouterGroupType = constant.HTTPRouterGroup
 				})
@@ -83,7 +83,7 @@ var _ = Describe("Domain Actions", func() {
 		})
 
 		Describe("IsShared", func() {
-			Context("when the the type is shared", func() {
+			When("the the type is shared", func() {
 				BeforeEach(func() {
 					domain.Type = constant.SharedDomain
 				})
@@ -93,7 +93,7 @@ var _ = Describe("Domain Actions", func() {
 				})
 			})
 
-			Context("when the RouterGroupType is anything else", func() {
+			When("the RouterGroupType is anything else", func() {
 				BeforeEach(func() {
 					domain.Type = constant.PrivateDomain
 				})
@@ -105,7 +105,7 @@ var _ = Describe("Domain Actions", func() {
 		})
 
 		Describe("IsPrivate", func() {
-			Context("when the the type is shared", func() {
+			When("the the type is shared", func() {
 				BeforeEach(func() {
 					domain.Type = constant.PrivateDomain
 				})
@@ -115,7 +115,7 @@ var _ = Describe("Domain Actions", func() {
 				})
 			})
 
-			Context("when the RouterGroupType is anything else", func() {
+			When("the RouterGroupType is anything else", func() {
 				BeforeEach(func() {
 					domain.Type = constant.SharedDomain
 				})
@@ -129,7 +129,7 @@ var _ = Describe("Domain Actions", func() {
 
 	Describe("DomainNotFoundError", func() {
 		var err actionerror.DomainNotFoundError
-		Context("when the name is provided", func() {
+		When("the name is provided", func() {
 			BeforeEach(func() {
 				err = actionerror.DomainNotFoundError{Name: "some-domain-name"}
 			})
@@ -139,7 +139,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when the name is not provided but the guid is", func() {
+		When("the name is not provided but the guid is", func() {
 			BeforeEach(func() {
 				err = actionerror.DomainNotFoundError{GUID: "some-domain-guid"}
 			})
@@ -149,7 +149,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when neither the name nor the guid is provided", func() {
+		When("neither the name nor the guid is provided", func() {
 			BeforeEach(func() {
 				err = actionerror.DomainNotFoundError{}
 			})
@@ -161,7 +161,7 @@ var _ = Describe("Domain Actions", func() {
 	})
 
 	Describe("GetDomain", func() {
-		Context("when the domain exists and is a shared domain", func() {
+		When("the domain exists and is a shared domain", func() {
 			var expectedDomain ccv2.Domain
 
 			BeforeEach(func() {
@@ -175,7 +175,7 @@ var _ = Describe("Domain Actions", func() {
 			It("returns the shared domain", func() {
 				domain, warnings, err := actor.GetDomain("shared-domain-guid")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(warnings).To(Equal(Warnings{"get-domain-warning"}))
+				Expect(warnings).To(ConsistOf("get-domain-warning"))
 				Expect(domain).To(Equal(Domain(expectedDomain)))
 
 				Expect(fakeCloudControllerClient.GetSharedDomainCallCount()).To(Equal(1))
@@ -183,7 +183,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when the domain exists and is a private domain", func() {
+		When("the domain exists and is a private domain", func() {
 			var expectedDomain ccv2.Domain
 
 			BeforeEach(func() {
@@ -207,7 +207,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when the domain does not exist", func() {
+		When("the domain does not exist", func() {
 			var expectedErr actionerror.DomainNotFoundError
 
 			BeforeEach(func() {
@@ -271,6 +271,109 @@ var _ = Describe("Domain Actions", func() {
 		)
 	})
 
+	Describe("GetDomains", func() {
+		var (
+			domains    []Domain
+			warnings   Warnings
+			executeErr error
+		)
+
+		JustBeforeEach(func() {
+			domains, warnings, executeErr = actor.GetDomains("some-org")
+		})
+
+		It("calls GetSharedDomains", func() {
+			Expect(fakeCloudControllerClient.GetSharedDomainsCallCount()).To(Equal(1))
+		})
+
+		When("GetSharedDomains returns successfully", func() {
+			BeforeEach(func() {
+				fakeCloudControllerClient.GetSharedDomainsReturns(
+					[]ccv2.Domain{
+						{
+							Name: "some-domain.com",
+							Type: constant.SharedDomain,
+						},
+						{
+							Name: "some-other-domain.com",
+							Type: constant.SharedDomain,
+						},
+					},
+					ccv2.Warnings{"warning-1", "warning-2"},
+					nil)
+			})
+
+			It("returns all shared domains and prints all warnings", func() {
+				Expect(executeErr).NotTo(HaveOccurred())
+				Expect(warnings).To(ConsistOf("warning-1", "warning-2"))
+				Expect(domains).To(ConsistOf(
+					Domain{Name: "some-domain.com", Type: constant.SharedDomain},
+					Domain{Name: "some-other-domain.com", Type: constant.SharedDomain},
+				))
+			})
+
+			It("calls GetOrganizationPrivateDomains with the given org guid", func() {
+				Expect(fakeCloudControllerClient.GetOrganizationPrivateDomainsCallCount()).To(Equal(1))
+				Expect(fakeCloudControllerClient.GetOrganizationPrivateDomainsArgsForCall(0)).To(Equal("some-org"))
+			})
+
+			When("GetOrganizationPrivateDomains returns successfully", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetOrganizationPrivateDomainsReturns(
+						[]ccv2.Domain{
+							{
+								Name: "some-domain.private",
+								Type: constant.PrivateDomain,
+							},
+							{
+								Name: "some-other-domain.private",
+								Type: constant.PrivateDomain,
+							},
+						},
+						ccv2.Warnings{"warning-3", "warning-4"},
+						nil)
+				})
+
+				It("returns the shared and private domains and returns all warnings", func() {
+					Expect(executeErr).NotTo(HaveOccurred())
+					Expect(warnings).To(ConsistOf("warning-1", "warning-2", "warning-3", "warning-4"))
+					Expect(domains).To(ConsistOf(
+						Domain{Name: "some-domain.com", Type: constant.SharedDomain},
+						Domain{Name: "some-other-domain.com", Type: constant.SharedDomain},
+						Domain{Name: "some-domain.private", Type: constant.PrivateDomain},
+						Domain{Name: "some-other-domain.private", Type: constant.PrivateDomain},
+					))
+				})
+			})
+
+			When("GetOrganizationPrivateDomains returns an error", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetOrganizationPrivateDomainsReturns(nil, ccv2.Warnings{"warning-3", "warning-4"}, errors.New("boom"))
+				})
+
+				It("returns the error and all warnings", func() {
+					Expect(executeErr).To(MatchError("boom"))
+					Expect(warnings).To(ConsistOf("warning-1", "warning-2", "warning-3", "warning-4"))
+				})
+			})
+		})
+
+		When("GetSharedDomains returns an error", func() {
+			BeforeEach(func() {
+				fakeCloudControllerClient.GetSharedDomainsReturns(nil, ccv2.Warnings{"warning-1", "warning-2"}, errors.New("boom"))
+			})
+
+			It("returns the error and all warnings", func() {
+				Expect(executeErr).To(MatchError("boom"))
+				Expect(warnings).To(ConsistOf("warning-1", "warning-2"))
+			})
+
+			It("does not call GetOrganizationPrivateDomains", func() {
+				Expect(fakeCloudControllerClient.GetOrganizationPrivateDomainsCallCount()).To(Equal(0))
+			})
+		})
+	})
+
 	Describe("GetDomainsByNameAndOrganization", func() {
 		var (
 			domainNames []string
@@ -290,7 +393,7 @@ var _ = Describe("Domain Actions", func() {
 			domains, warnings, executeErr = actor.GetDomainsByNameAndOrganization(domainNames, orgGUID)
 		})
 
-		Context("when looking up the shared domains is successful", func() {
+		When("looking up the shared domains is successful", func() {
 			var sharedDomains []ccv2.Domain
 
 			BeforeEach(func() {
@@ -300,7 +403,7 @@ var _ = Describe("Domain Actions", func() {
 				fakeCloudControllerClient.GetSharedDomainsReturns(sharedDomains, ccv2.Warnings{"shared-warning-1", "shared-warning-2"}, nil)
 			})
 
-			Context("when looking up the private domains is successful", func() {
+			When("looking up the private domains is successful", func() {
 				var privateDomains []ccv2.Domain
 
 				BeforeEach(func() {
@@ -338,7 +441,7 @@ var _ = Describe("Domain Actions", func() {
 				})
 			})
 
-			Context("when looking up the private domains errors", func() {
+			When("looking up the private domains errors", func() {
 				var expectedErr error
 
 				BeforeEach(func() {
@@ -353,7 +456,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when no domains are provided", func() {
+		When("no domains are provided", func() {
 			BeforeEach(func() {
 				domainNames = nil
 			})
@@ -368,7 +471,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when looking up the shared domains errors", func() {
+		When("looking up the shared domains errors", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -384,7 +487,7 @@ var _ = Describe("Domain Actions", func() {
 	})
 
 	Describe("GetSharedDomain", func() {
-		Context("when the shared domain exists", func() {
+		When("the shared domain exists", func() {
 			var expectedDomain ccv2.Domain
 
 			BeforeEach(func() {
@@ -405,7 +508,7 @@ var _ = Describe("Domain Actions", func() {
 				Expect(fakeCloudControllerClient.GetSharedDomainArgsForCall(0)).To(Equal("shared-domain-guid"))
 			})
 
-			Context("when the domain has been looked up multiple times", func() {
+			When("the domain has been looked up multiple times", func() {
 				It("caches the domain", func() {
 					domain, warnings, err := actor.GetSharedDomain("shared-domain-guid")
 					Expect(err).NotTo(HaveOccurred())
@@ -422,7 +525,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when the API returns a not found error", func() {
+		When("the API returns a not found error", func() {
 			var expectedErr actionerror.DomainNotFoundError
 
 			BeforeEach(func() {
@@ -438,7 +541,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when the API returns any other error", func() {
+		When("the API returns any other error", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -456,7 +559,7 @@ var _ = Describe("Domain Actions", func() {
 	})
 
 	Describe("GetPrivateDomain", func() {
-		Context("when the private domain exists", func() {
+		When("the private domain exists", func() {
 			var expectedDomain ccv2.Domain
 
 			BeforeEach(func() {
@@ -477,7 +580,7 @@ var _ = Describe("Domain Actions", func() {
 				Expect(fakeCloudControllerClient.GetPrivateDomainArgsForCall(0)).To(Equal("private-domain-guid"))
 			})
 
-			Context("when the domain has been looked up multiple times", func() {
+			When("the domain has been looked up multiple times", func() {
 				It("caches the domain", func() {
 					domain, warnings, err := actor.GetPrivateDomain("private-domain-guid")
 					Expect(err).NotTo(HaveOccurred())
@@ -494,7 +597,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when the API returns a not found error", func() {
+		When("the API returns a not found error", func() {
 			var expectedErr actionerror.DomainNotFoundError
 
 			BeforeEach(func() {
@@ -510,7 +613,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when the API returns any other error", func() {
+		When("the API returns any other error", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -528,7 +631,7 @@ var _ = Describe("Domain Actions", func() {
 	})
 
 	Describe("GetOrganizationDomains", func() {
-		Context("when the organization has both shared and private domains", func() {
+		When("the organization has both shared and private domains", func() {
 			BeforeEach(func() {
 				sharedDomain := ccv2.Domain{
 					Name: "some-shared-domain",
@@ -563,7 +666,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when get shared domains returns an error", func() {
+		When("get shared domains returns an error", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -579,7 +682,7 @@ var _ = Describe("Domain Actions", func() {
 			})
 		})
 
-		Context("when get organization private domains returns an error", func() {
+		When("get organization private domains returns an error", func() {
 			var expectedErr error
 
 			BeforeEach(func() {

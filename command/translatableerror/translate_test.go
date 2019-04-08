@@ -43,13 +43,16 @@ var _ = Describe("Translatable Errors", func() {
 		Entry("AppNotFoundInManifestError", AppNotFoundInManifestError{}),
 		Entry("ArgumentCombinationError", ArgumentCombinationError{}),
 		Entry("AssignDropletError", AssignDropletError{}),
-		Entry("BadCredentialsError", BadCredentialsError{}),
+		Entry("BadCredentialsError", UnauthorizedError{}),
+		Entry("BuildpackNotFoundError", BuildpackNotFoundError{}),
+		Entry("BuildpackStackChangeError", BuildpackStackChangeError{}),
 		Entry("CFNetworkingEndpointNotFoundError", CFNetworkingEndpointNotFoundError{}),
 		Entry("CommandLineArgsWithMultipleAppsError", CommandLineArgsWithMultipleAppsError{}),
 		Entry("CommandLineOptionsAndManifestConflictError", CommandLineOptionsAndManifestConflictError{}),
 		Entry("DockerPasswordNotSetError", DockerPasswordNotSetError{}),
 		Entry("DownloadPluginHTTPError", DownloadPluginHTTPError{}),
 		Entry("EmptyDirectoryError", EmptyDirectoryError{}),
+		Entry("EmptyBuildpacksError", EmptyBuildpacksError{}),
 		Entry("FetchingPluginInfoFromRepositoriesError", FetchingPluginInfoFromRepositoriesError{}),
 		Entry("FileChangedError", FileChangedError{}),
 		Entry("FileNotFoundError", FileNotFoundError{}),
@@ -58,6 +61,7 @@ var _ = Describe("Translatable Errors", func() {
 		Entry("HostAndPathNotAllowedWithTCPDomainError", HostAndPathNotAllowedWithTCPDomainError{}),
 		Entry("HostnameWithTCPDomainError", HostnameWithTCPDomainError{}),
 		Entry("HTTPHealthCheckInvalidError", HTTPHealthCheckInvalidError{}),
+		Entry("HTTPStatusError", HTTPStatusError{Status: "some status"}),
 		Entry("InvalidChecksumError", InvalidChecksumError{}),
 		Entry("InvalidRouteError", InvalidRouteError{}),
 		Entry("InvalidSSLCertError", InvalidSSLCertError{}),
@@ -68,7 +72,10 @@ var _ = Describe("Translatable Errors", func() {
 		Entry("LifecycleMinimumAPIVersionNotMetError", LifecycleMinimumAPIVersionNotMetError{}),
 		Entry("ManifestCreationError", ManifestCreationError{}),
 		Entry("ManifestFileNotFoundInDirectoryError", ManifestFileNotFoundInDirectoryError{}),
-		Entry("MinimumAPIVersionNotMetError", MinimumAPIVersionNotMetError{}),
+		Entry("MinimumCFAPIVersionNotMetError", MinimumCFAPIVersionNotMetError{}),
+		Entry("MinimumCLIVersionNotMetError", MinimumCLIVersionNotMetError{}),
+		Entry("MissingCredentialsError", MissingCredentialsError{}),
+		Entry("MultiError", MultiError{}),
 		Entry("NetworkPolicyProtocolOrPortNotProvidedError", NetworkPolicyProtocolOrPortNotProvidedError{}),
 		Entry("NoAPISetError", NoAPISetError{}),
 		Entry("NoCompatibleBinaryError", NoCompatibleBinaryError{}),
@@ -79,6 +86,7 @@ var _ = Describe("Translatable Errors", func() {
 		Entry("NoSpaceTargetedError", NoSpaceTargetedError{}),
 		Entry("NotLoggedInError", NotLoggedInError{}),
 		Entry("OrgNotFoundError", OrganizationNotFoundError{}),
+		Entry("OrganizationQuotaNotFoundForNameError", OrganizationQuotaNotFoundForNameError{}),
 		Entry("ParseArgumentError", ParseArgumentError{}),
 		Entry("PasswordGrantTypeLogoutRequiredError", PasswordGrantTypeLogoutRequiredError{}),
 		Entry("PluginAlreadyInstalledError", PluginAlreadyInstalledError{}),
@@ -97,7 +105,6 @@ var _ = Describe("Translatable Errors", func() {
 		Entry("RepositoryNameTakenError", RepositoryNameTakenError{}),
 		Entry("RequiredArgumentError", RequiredArgumentError{}),
 		Entry("RequiredFlagsError", RequiredFlagsError{}),
-		Entry("RequiredNameForPushError", RequiredNameForPushError{}),
 		Entry("RouteInDifferentSpaceError", RouteInDifferentSpaceError{}),
 		Entry("RoutePathWithTCPDomainError", RoutePathWithTCPDomainError{}),
 		Entry("RunTaskError", RunTaskError{}),
@@ -106,6 +113,7 @@ var _ = Describe("Translatable Errors", func() {
 		Entry("ServiceInstanceNotFoundError", ServiceInstanceNotFoundError{}),
 		Entry("SharedServiceInstanceNotFoundError", SharedServiceInstanceNotFoundError{}),
 		Entry("SpaceNotFoundError", SpaceNotFoundError{}),
+		Entry("SpaceQuotaNotFoundByNameError", SpaceQuotaNotFoundByNameError{}),
 		Entry("SSHUnableToAuthenticateError", SSHUnableToAuthenticateError{}),
 		Entry("SSLCertError", SSLCertError{}),
 		Entry("StackNotFoundError with name", SpaceNotFoundError{Name: "steve"}),
@@ -116,21 +124,20 @@ var _ = Describe("Translatable Errors", func() {
 		Entry("StartupTimeoutError", StartupTimeoutError{}),
 		Entry("ThreeRequiredArgumentsError", ThreeRequiredArgumentsError{}),
 		Entry("TriggerLegacyPushError", TriggerLegacyPushError{}),
-		Entry("UnsuccessfulStartError", UnsuccessfulStartError{}),
 		Entry("UnsupportedURLSchemeError", UnsupportedURLSchemeError{}),
 		Entry("UploadFailedError", UploadFailedError{Err: JobFailedError{}}),
 		Entry("V3APIDoesNotExistError", V3APIDoesNotExistError{}),
 	)
 
 	Describe("PluginInvalidError", func() {
-		Context("when the wrapped error is nil", func() {
+		When("the wrapped error is nil", func() {
 			It("does not concatenate the nil error in the returned Error()", func() {
 				err := PluginInvalidError{}
 				Expect(err.Error()).To(Equal("File is not a valid cf CLI plugin binary."))
 			})
 		})
 
-		Context("when the wrapped error is not nil", func() {
+		When("the wrapped error is not nil", func() {
 			It("does prepends the error message in the returned Error()", func() {
 				err := PluginInvalidError{Err: errors.New("ello")}
 				Expect(err.Error()).To(Equal("ello\nFile is not a valid cf CLI plugin binary."))

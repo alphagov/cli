@@ -54,7 +54,7 @@ var _ = Describe("Resource Actions", func() {
 	})
 
 	Describe("GatherArchiveResources", func() {
-		Context("when the archive exists", func() {
+		When("the archive exists", func() {
 			var (
 				archive string
 
@@ -80,7 +80,24 @@ var _ = Describe("Resource Actions", func() {
 				Expect(os.RemoveAll(archive)).ToNot(HaveOccurred())
 			})
 
-			Context("when the file is a symlink to an archive", func() {
+			When("archive is empty", func() {
+				BeforeEach(func() {
+					var err error
+					srcDir, err = ioutil.TempDir("", "v2-resource-actions-empty")
+					Expect(err).ToNot(HaveOccurred())
+				})
+
+				AfterEach(func() {
+					Expect(os.RemoveAll(srcDir)).ToNot(HaveOccurred())
+				})
+
+				It("returns an EmptyArchiveError", func() {
+					_, err := actor.GatherArchiveResources(archive)
+					Expect(err).To(MatchError(actionerror.EmptyArchiveError{Path: archive}))
+				})
+			})
+
+			When("the file is a symlink to an archive", func() {
 				var symlinkToArchive string
 
 				BeforeEach(func() {
@@ -116,7 +133,7 @@ var _ = Describe("Resource Actions", func() {
 				})
 			})
 
-			Context("when a .cfignore file exists in the archive", func() {
+			When("a .cfignore file exists in the archive", func() {
 				BeforeEach(func() {
 					err := ioutil.WriteFile(filepath.Join(srcDir, ".cfignore"), []byte("level2"), 0655)
 					Expect(err).ToNot(HaveOccurred())
@@ -135,7 +152,7 @@ var _ = Describe("Resource Actions", func() {
 				})
 			})
 
-			Context("when default ignored files exist in the archive", func() {
+			When("default ignored files exist in the archive", func() {
 				BeforeEach(func() {
 					for _, filename := range DefaultIgnoreLines {
 						if filename != ".cfignore" {
@@ -163,7 +180,7 @@ var _ = Describe("Resource Actions", func() {
 			})
 		})
 
-		Context("when the archive does not exist", func() {
+		When("the archive does not exist", func() {
 			It("returns an error if the file is problematic", func() {
 				_, err := actor.GatherArchiveResources("/does/not/exist")
 				Expect(os.IsNotExist(err)).To(BeTrue())
@@ -172,7 +189,7 @@ var _ = Describe("Resource Actions", func() {
 	})
 
 	Describe("GatherDirectoryResources", func() {
-		Context("when files exist in the directory", func() {
+		When("files exist in the directory", func() {
 			var (
 				gatheredResources []Resource
 				executeErr        error
@@ -182,7 +199,7 @@ var _ = Describe("Resource Actions", func() {
 				gatheredResources, executeErr = actor.GatherDirectoryResources(srcDir)
 			})
 
-			Context("when the provided path is a symlink to the directory", func() {
+			When("the provided path is a symlink to the directory", func() {
 				var tmpDir string
 
 				BeforeEach(func() {
@@ -215,7 +232,7 @@ var _ = Describe("Resource Actions", func() {
 				})
 			})
 
-			Context("when a .cfignore file exists in the sourceDir", func() {
+			When("a .cfignore file exists in the sourceDir", func() {
 				Context("with relative paths", func() {
 					BeforeEach(func() {
 						err := ioutil.WriteFile(filepath.Join(srcDir, ".cfignore"), []byte("level2"), 0655)
@@ -253,7 +270,7 @@ var _ = Describe("Resource Actions", func() {
 				})
 			})
 
-			Context("when default ignored files exist in the app dir", func() {
+			When("default ignored files exist in the app dir", func() {
 				BeforeEach(func() {
 					for _, filename := range DefaultIgnoreLines {
 						if filename != ".cfignore" {
@@ -279,7 +296,7 @@ var _ = Describe("Resource Actions", func() {
 				})
 			})
 
-			Context("when trace files are in the source directory", func() {
+			When("trace files are in the source directory", func() {
 				BeforeEach(func() {
 					traceFilePath := filepath.Join(srcDir, "i-am-trace.txt")
 					err := ioutil.WriteFile(traceFilePath, nil, 0655)
@@ -303,7 +320,7 @@ var _ = Describe("Resource Actions", func() {
 			})
 		})
 
-		Context("when the directory is empty", func() {
+		When("the directory is empty", func() {
 			var emptyDir string
 
 			BeforeEach(func() {
@@ -349,7 +366,7 @@ var _ = Describe("Resource Actions", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		Context("when zipping on UNIX", func() {
+		When("zipping on UNIX", func() {
 			It("zips the directory and keeps the file permissions", func() {
 				Expect(executeErr).ToNot(HaveOccurred())
 

@@ -10,14 +10,14 @@ import (
 	"code.cloudfoundry.org/cli/cf/errors"
 	"code.cloudfoundry.org/cli/cf/requirements"
 	"code.cloudfoundry.org/cli/cf/requirements/requirementsfakes"
-	testcmd "code.cloudfoundry.org/cli/util/testhelpers/commands"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testcmd "code.cloudfoundry.org/cli/cf/util/testhelpers/commands"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 	"code.cloudfoundry.org/gofileutils/fileutils"
 
 	"code.cloudfoundry.org/cli/cf/commandregistry"
 	"code.cloudfoundry.org/cli/cf/trace"
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -136,7 +136,25 @@ var _ = Describe("curl command", func() {
 		Expect(curlRepo.Method).To(Equal("post"))
 		Expect(ui.Outputs()).ToNot(ContainSubstrings([]string{"FAILED"}))
 	})
+	When("--fail/-f is passed", func() {
+		BeforeEach(func() {
+			curlRepo.Error = errors.NewHTTPError(500, "", "")
+		})
 
+		It("fails on HTTP errors given --fail", func() {
+			runCurlWithInputs([]string{"--fail", "/foo"})
+
+			Expect(curlRepo.FailOnHTTPError).To(Equal(true))
+			Expect(ui.Outputs()).To(ContainSubstrings([]string{"The requested URL returned error: 500"}))
+		})
+
+		It("does not fail on HTTP erros if --fail is false", func() {
+			runCurlWithInputs([]string{"--fail", "false", "/foo"})
+
+			Expect(curlRepo.FailOnHTTPError).To(Equal(false))
+		})
+
+	})
 	It("sends headers given -H", func() {
 		runCurlWithInputs([]string{"-H", "Content-Type:cat", "/foo"})
 

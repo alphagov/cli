@@ -14,7 +14,6 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	. "github.com/onsi/gomega/types"
 )
 
 func streamsDrainedAndClosed(configStream <-chan ApplicationConfig, eventStream <-chan Event, warningsStream <-chan Warnings, errorStream <-chan error) bool {
@@ -73,15 +72,6 @@ func setUpNextEvent(c <-chan ApplicationConfig, e <-chan Event, w <-chan Warning
 	}
 }
 
-func EqualEither(events ...Event) GomegaMatcher {
-	var equals []GomegaMatcher
-	for _, event := range events {
-		equals = append(equals, Equal(event))
-	}
-
-	return Or(equals...)
-}
-
 var _ = Describe("Apply", func() {
 	var (
 		actor           *Actor
@@ -100,9 +90,7 @@ var _ = Describe("Apply", func() {
 	)
 
 	BeforeEach(func() {
-		fakeV2Actor = new(pushactionfakes.FakeV2Actor)
-		fakeSharedActor = new(pushactionfakes.FakeSharedActor)
-		actor = NewActor(fakeV2Actor, nil, fakeSharedActor)
+		actor, fakeV2Actor, _, fakeSharedActor = getTestPushActor()
 		config = ApplicationConfig{
 			DesiredApplication: Application{
 				Application: v2action.Application{
@@ -112,7 +100,6 @@ var _ = Describe("Apply", func() {
 			DesiredRoutes: []v2action.Route{{Host: "banana"}},
 		}
 		fakeProgressBar = new(pushactionfakes.FakeProgressBar)
-
 	})
 
 	JustBeforeEach(func() {
@@ -125,7 +112,7 @@ var _ = Describe("Apply", func() {
 		Eventually(streamsDrainedAndClosed(configStream, eventStream, warningsStream, errorStream)).Should(BeTrue())
 	})
 
-	Context("when creating/updating the application is successful", func() {
+	When("creating/updating the application is successful", func() {
 		var createdApp v2action.Application
 
 		BeforeEach(func() {
@@ -143,7 +130,7 @@ var _ = Describe("Apply", func() {
 			Eventually(eventStream).Should(Receive(Equal(CreatedApplication)))
 		})
 
-		Context("when the route creation is successful", func() {
+		When("the route creation is successful", func() {
 			var createdRoutes []v2action.Route
 
 			BeforeEach(func() {
@@ -157,7 +144,7 @@ var _ = Describe("Apply", func() {
 				Eventually(eventStream).Should(Receive(Equal(CreatedRoutes)))
 			})
 
-			Context("when mapping the routes is successful", func() {
+			When("mapping the routes is successful", func() {
 				var desiredServices map[string]v2action.ServiceInstance
 
 				BeforeEach(func() {
@@ -173,7 +160,7 @@ var _ = Describe("Apply", func() {
 					Eventually(eventStream).Should(Receive(Equal(BoundRoutes)))
 				})
 
-				Context("when service binding is successful", func() {
+				When("service binding is successful", func() {
 					BeforeEach(func() {
 						fakeV2Actor.BindServiceByApplicationAndServiceInstanceReturns(v2action.Warnings{"bind-service-warnings-1", "bind-service-warnings-2"}, nil)
 					})
@@ -184,7 +171,7 @@ var _ = Describe("Apply", func() {
 						Eventually(eventStream).Should(Receive(Equal(BoundServices)))
 					})
 
-					Context("when resource matching happens", func() {
+					When("resource matching happens", func() {
 						BeforeEach(func() {
 							config.Path = "some-path"
 						})
@@ -194,12 +181,12 @@ var _ = Describe("Apply", func() {
 							Eventually(warningsStream).Should(Receive(ConsistOf("resource-warnings-1", "resource-warnings-2")))
 						})
 
-						Context("when there is at least one resource that has not been matched", func() {
+						When("there is at least one resource that has not been matched", func() {
 							BeforeEach(func() {
 								fakeV2Actor.ResourceMatchReturns(nil, []v2action.Resource{{}}, v2action.Warnings{"resource-warnings-1", "resource-warnings-2"}, nil)
 							})
 
-							Context("when the archive creation is successful", func() {
+							When("the archive creation is successful", func() {
 								var archivePath string
 
 								BeforeEach(func() {
@@ -217,7 +204,7 @@ var _ = Describe("Apply", func() {
 									Eventually(eventStream).Should(Receive(Equal(CreatingArchive)))
 								})
 
-								Context("when the upload is successful", func() {
+								When("the upload is successful", func() {
 									BeforeEach(func() {
 										fakeV2Actor.UploadApplicationPackageReturns(v2action.Job{}, v2action.Warnings{"upload-warnings-1", "upload-warnings-2"}, nil)
 									})
@@ -247,7 +234,7 @@ var _ = Describe("Apply", func() {
 							})
 						})
 
-						Context("when all the resources have been matched", func() {
+						When("all the resources have been matched", func() {
 							BeforeEach(func() {
 								fakeV2Actor.ResourceMatchReturns(nil, nil, v2action.Warnings{"resource-warnings-1", "resource-warnings-2"}, nil)
 							})
@@ -257,7 +244,7 @@ var _ = Describe("Apply", func() {
 								Eventually(warningsStream).Should(Receive(ConsistOf("upload-warnings-1", "upload-warnings-2")))
 							})
 
-							Context("when the upload is successful", func() {
+							When("the upload is successful", func() {
 								BeforeEach(func() {
 									fakeV2Actor.UploadApplicationPackageReturns(v2action.Job{}, v2action.Warnings{"upload-warnings-1", "upload-warnings-2"}, nil)
 								})
@@ -283,7 +270,7 @@ var _ = Describe("Apply", func() {
 						})
 					})
 
-					Context("when a droplet is provided", func() {
+					When("a droplet is provided", func() {
 						var dropletPath string
 
 						BeforeEach(func() {
@@ -301,7 +288,7 @@ var _ = Describe("Apply", func() {
 							Expect(os.RemoveAll(dropletPath)).ToNot(HaveOccurred())
 						})
 
-						Context("when the upload is successful", func() {
+						When("the upload is successful", func() {
 							BeforeEach(func() {
 								fakeV2Actor.UploadDropletReturns(v2action.Job{}, v2action.Warnings{"upload-warnings-1", "upload-warnings-2"}, nil)
 							})
@@ -332,7 +319,7 @@ var _ = Describe("Apply", func() {
 		})
 	})
 
-	Context("when creating/updating errors", func() {
+	When("creating/updating errors", func() {
 		var expectedErr error
 
 		BeforeEach(func() {
@@ -353,17 +340,17 @@ var _ = Describe("Apply", func() {
 			config.DesiredRoutes = v2action.Routes{{GUID: "some-route-guid"}}
 		})
 
-		Context("when NoRoutes is set", func() {
+		When("NoRoutes is set", func() {
 			BeforeEach(func() {
 				config.NoRoute = true
 			})
 
-			Context("when config has at least one route", func() {
+			When("config has at least one route", func() {
 				BeforeEach(func() {
 					config.CurrentRoutes = []v2action.Route{{GUID: "some-route-guid-1"}}
 				})
 
-				Context("when unmapping routes succeeds", func() {
+				When("unmapping routes succeeds", func() {
 					BeforeEach(func() {
 						fakeV2Actor.UnmapRouteFromApplicationReturns(v2action.Warnings{"unmapping-route-warnings"}, nil)
 					})
@@ -375,7 +362,7 @@ var _ = Describe("Apply", func() {
 					})
 				})
 
-				Context("when unmapping routes fails", func() {
+				When("unmapping routes fails", func() {
 					BeforeEach(func() {
 						fakeV2Actor.UnmapRouteFromApplicationReturns(v2action.Warnings{"unmapping-route-warnings"}, errors.New("ohno"))
 					})
@@ -389,7 +376,7 @@ var _ = Describe("Apply", func() {
 				})
 			})
 
-			Context("when config has no routes", func() {
+			When("config has no routes", func() {
 				BeforeEach(func() {
 					config.CurrentRoutes = nil
 				})
@@ -403,7 +390,7 @@ var _ = Describe("Apply", func() {
 			})
 		})
 
-		Context("when NoRoutes is NOT set", func() {
+		When("NoRoutes is NOT set", func() {
 			BeforeEach(func() {
 				config.NoRoute = false
 			})
@@ -412,7 +399,7 @@ var _ = Describe("Apply", func() {
 				Eventually(nextEvent).Should(Equal(CreatingAndMappingRoutes))
 			})
 
-			Context("when no new routes are provided", func() {
+			When("no new routes are provided", func() {
 				BeforeEach(func() {
 					config.DesiredRoutes = nil
 				})
@@ -424,12 +411,12 @@ var _ = Describe("Apply", func() {
 				})
 			})
 
-			Context("when new routes are provided", func() {
+			When("new routes are provided", func() {
 				BeforeEach(func() {
 					config.DesiredRoutes = []v2action.Route{{}}
 				})
 
-				Context("when route creation fails", func() {
+				When("route creation fails", func() {
 					BeforeEach(func() {
 						fakeV2Actor.CreateRouteReturns(v2action.Route{}, v2action.Warnings{"create-route-warning"}, errors.New("ohno"))
 					})
@@ -442,7 +429,7 @@ var _ = Describe("Apply", func() {
 					})
 				})
 
-				Context("when route creation succeeds", func() {
+				When("route creation succeeds", func() {
 					BeforeEach(func() {
 						fakeV2Actor.CreateRouteReturns(v2action.Route{}, v2action.Warnings{"create-route-warning"}, nil)
 					})
@@ -455,7 +442,7 @@ var _ = Describe("Apply", func() {
 				})
 			})
 
-			Context("when there are no routes to map", func() {
+			When("there are no routes to map", func() {
 				BeforeEach(func() {
 					config.CurrentRoutes = config.DesiredRoutes
 				})
@@ -471,12 +458,12 @@ var _ = Describe("Apply", func() {
 				})
 			})
 
-			Context("when there are routes to map", func() {
+			When("there are routes to map", func() {
 				BeforeEach(func() {
 					config.DesiredRoutes = []v2action.Route{{GUID: "new-guid"}}
 				})
 
-				Context("when binding the route fails", func() {
+				When("binding the route fails", func() {
 					BeforeEach(func() {
 						fakeV2Actor.MapRouteToApplicationReturns(v2action.Warnings{"bind-route-warning"}, errors.New("ohno"))
 					})
@@ -489,7 +476,7 @@ var _ = Describe("Apply", func() {
 					})
 				})
 
-				Context("when binding the route succeeds", func() {
+				When("binding the route succeeds", func() {
 					BeforeEach(func() {
 						fakeV2Actor.MapRouteToApplicationReturns(v2action.Warnings{"bind-route-warning"}, nil)
 					})
@@ -515,7 +502,7 @@ var _ = Describe("Apply", func() {
 			service2 = v2action.ServiceInstance{Name: "service_2", GUID: "service_2_guid"}
 		})
 
-		Context("when there are no new services", func() {
+		When("there are no new services", func() {
 			BeforeEach(func() {
 				config.CurrentServices = map[string]v2action.ServiceInstance{"service1": service1}
 				config.DesiredServices = map[string]v2action.ServiceInstance{"service1": service1}
@@ -526,13 +513,13 @@ var _ = Describe("Apply", func() {
 			})
 		})
 
-		Context("when are new services", func() {
+		When("are new services", func() {
 			BeforeEach(func() {
 				config.CurrentServices = map[string]v2action.ServiceInstance{"service1": service1}
 				config.DesiredServices = map[string]v2action.ServiceInstance{"service1": service1, "service2": service2}
 			})
 
-			Context("when binding services fails", func() {
+			When("binding services fails", func() {
 				BeforeEach(func() {
 					fakeV2Actor.BindServiceByApplicationAndServiceInstanceReturns(v2action.Warnings{"bind-service-warning"}, errors.New("ohno"))
 				})
@@ -545,7 +532,7 @@ var _ = Describe("Apply", func() {
 				})
 			})
 
-			Context("when binding services suceeds", func() {
+			When("binding services suceeds", func() {
 				BeforeEach(func() {
 					fakeV2Actor.BindServiceByApplicationAndServiceInstanceReturns(v2action.Warnings{"bind-service-warning"}, nil)
 				})
@@ -560,7 +547,7 @@ var _ = Describe("Apply", func() {
 	})
 
 	Describe("Upload", func() {
-		Context("when a droplet is provided", func() {
+		When("a droplet is provided", func() {
 			var dropletPath string
 
 			BeforeEach(func() {
@@ -578,8 +565,8 @@ var _ = Describe("Apply", func() {
 				Expect(os.RemoveAll(dropletPath)).ToNot(HaveOccurred())
 			})
 
-			Context("when uploading the droplet fails", func() {
-				Context("when the error is a retryable error", func() {
+			When("uploading the droplet fails", func() {
+				When("the error is a retryable error", func() {
 					var someErr error
 					BeforeEach(func() {
 						someErr = errors.New("I AM A BANANA")
@@ -600,12 +587,12 @@ var _ = Describe("Apply", func() {
 						Expect(nextEvent()).To(Equal(RetryUpload))
 
 						Consistently(nextEvent).ShouldNot(EqualEither(RetryUpload, UploadDropletComplete, Complete))
-						Eventually(fakeV2Actor.UploadDropletCallCount()).Should(Equal(3))
+						Eventually(fakeV2Actor.UploadDropletCallCount).Should(Equal(3))
 						Expect(errorStream).To(Receive(MatchError(actionerror.UploadFailedError{Err: someErr})))
 					})
 				})
 
-				Context("when the error is not a retryable error", func() {
+				When("the error is not a retryable error", func() {
 					BeforeEach(func() {
 						fakeV2Actor.UploadDropletReturns(v2action.Job{}, v2action.Warnings{"droplet-upload-warning"}, errors.New("ohnos"))
 					})
@@ -620,7 +607,7 @@ var _ = Describe("Apply", func() {
 				})
 			})
 
-			Context("when uploading the droplet is successful", func() {
+			When("uploading the droplet is successful", func() {
 				BeforeEach(func() {
 					fakeV2Actor.UploadDropletReturns(v2action.Job{}, v2action.Warnings{"droplet-upload-warning"}, nil)
 				})
@@ -633,8 +620,8 @@ var _ = Describe("Apply", func() {
 			})
 		})
 
-		Context("when app bits are provided", func() {
-			Context("when there is at least one unmatched resource", func() {
+		When("app bits are provided", func() {
+			When("there is at least one unmatched resource", func() {
 				BeforeEach(func() {
 					fakeV2Actor.ResourceMatchReturns(nil, []v2action.Resource{{}}, v2action.Warnings{"resource-warnings-1", "resource-warnings-2"}, nil)
 				})
@@ -644,7 +631,7 @@ var _ = Describe("Apply", func() {
 					Eventually(warningsStream).Should(Receive(ConsistOf("resource-warnings-1", "resource-warnings-2")))
 				})
 
-				Context("when creating the archive is successful", func() {
+				When("creating the archive is successful", func() {
 					var archivePath string
 
 					BeforeEach(func() {
@@ -662,7 +649,7 @@ var _ = Describe("Apply", func() {
 						Eventually(nextEvent).Should(Equal(CreatingArchive))
 					})
 
-					Context("when the upload is successful", func() {
+					When("the upload is successful", func() {
 						BeforeEach(func() {
 							fakeV2Actor.UploadApplicationPackageReturns(v2action.Job{}, v2action.Warnings{"upload-warnings-1", "upload-warnings-2"}, nil)
 						})
@@ -674,8 +661,8 @@ var _ = Describe("Apply", func() {
 						})
 					})
 
-					Context("when the upload fails", func() {
-						Context("when the upload error is a retryable error", func() {
+					When("the upload fails", func() {
+						When("the upload error is a retryable error", func() {
 							var someErr error
 
 							BeforeEach(func() {
@@ -697,13 +684,13 @@ var _ = Describe("Apply", func() {
 								Expect(nextEvent()).To(Equal(RetryUpload))
 
 								Consistently(nextEvent).ShouldNot(EqualEither(RetryUpload, UploadWithArchiveComplete, Complete))
-								Eventually(fakeV2Actor.UploadApplicationPackageCallCount()).Should(Equal(3))
+								Eventually(fakeV2Actor.UploadApplicationPackageCallCount).Should(Equal(3))
 								Expect(errorStream).To(Receive(MatchError(actionerror.UploadFailedError{Err: someErr})))
 							})
 
 						})
 
-						Context("when the upload error is not a retryable error", func() {
+						When("the upload error is not a retryable error", func() {
 							BeforeEach(func() {
 								fakeV2Actor.UploadApplicationPackageReturns(v2action.Job{}, v2action.Warnings{"upload-warnings-1", "upload-warnings-2"}, errors.New("dios mio"))
 							})
@@ -718,19 +705,21 @@ var _ = Describe("Apply", func() {
 					})
 				})
 
-				Context("when creating the archive fails", func() {
+				When("creating the archive fails", func() {
 					BeforeEach(func() {
 						fakeSharedActor.ZipDirectoryResourcesReturns("", errors.New("some-error"))
 					})
 
 					It("raises an error", func() {
-						Consistently(nextEvent).ShouldNot(Equal(Complete))
+						Eventually(nextEvent).Should(Equal(ResourceMatching))
+						Eventually(warningsStream).Should(Receive(ConsistOf("resource-warnings-1", "resource-warnings-2")))
 						Eventually(errorStream).Should(Receive(MatchError("some-error")))
+						Consistently(nextEvent).ShouldNot(Equal(Complete))
 					})
 				})
 			})
 
-			Context("when all resources have been matched", func() {
+			When("all resources have been matched", func() {
 				BeforeEach(func() {
 					fakeV2Actor.ResourceMatchReturns(nil, nil, v2action.Warnings{"resource-warnings-1", "resource-warnings-2"}, nil)
 				})
@@ -741,7 +730,7 @@ var _ = Describe("Apply", func() {
 					Expect(nextEvent()).To(Equal(UploadingApplication))
 				})
 
-				Context("when the upload is successful", func() {
+				When("the upload is successful", func() {
 					BeforeEach(func() {
 						fakeV2Actor.UploadApplicationPackageReturns(v2action.Job{}, v2action.Warnings{"upload-warnings-1", "upload-warnings-2"}, nil)
 					})
@@ -753,7 +742,7 @@ var _ = Describe("Apply", func() {
 					})
 				})
 
-				Context("when the upload fails", func() {
+				When("the upload fails", func() {
 					BeforeEach(func() {
 						fakeV2Actor.UploadApplicationPackageReturns(v2action.Job{}, v2action.Warnings{"upload-warnings-1", "upload-warnings-2"}, errors.New("some-upload-error"))
 					})
@@ -768,7 +757,7 @@ var _ = Describe("Apply", func() {
 			})
 		})
 
-		Context("when a docker image is provided", func() {
+		When("a docker image is provided", func() {
 			BeforeEach(func() {
 				config.DesiredApplication.DockerImage = "hi-im-a-ge"
 

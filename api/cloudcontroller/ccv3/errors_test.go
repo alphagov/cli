@@ -15,7 +15,7 @@ var _ = Describe("Error Wrapper", func() {
 	var client *Client
 
 	BeforeEach(func() {
-		client = NewTestClient()
+		client, _ = NewTestClient()
 	})
 
 	Describe("Make", func() {
@@ -56,7 +56,7 @@ var _ = Describe("Error Wrapper", func() {
 			_, _, makeError = client.GetApplications()
 		})
 
-		Context("when we can't unmarshal the response successfully", func() {
+		When("we can't unmarshal the response successfully", func() {
 			BeforeEach(func() {
 				serverResponse = "I am not unmarshallable"
 				serverResponseCode = http.StatusNotFound
@@ -67,8 +67,8 @@ var _ = Describe("Error Wrapper", func() {
 			})
 		})
 
-		Context("when the error is from the cloud controller", func() {
-			Context("when an empty list of errors is returned", func() {
+		When("the error is from the cloud controller", func() {
+			When("an empty list of errors is returned", func() {
 				BeforeEach(func() {
 					serverResponseCode = http.StatusUnauthorized
 					serverResponse = `{ "errors": [] }`
@@ -82,7 +82,7 @@ var _ = Describe("Error Wrapper", func() {
 				})
 			})
 
-			Context("when the error is a 4XX error", func() {
+			When("the error is a 4XX error", func() {
 				Context("(401) Unauthorized", func() {
 					BeforeEach(func() {
 						serverResponseCode = http.StatusUnauthorized
@@ -128,7 +128,26 @@ var _ = Describe("Error Wrapper", func() {
 						serverResponseCode = http.StatusNotFound
 					})
 
-					Context("when a process is not found", func() {
+					Context("API is not found", func() {
+
+						BeforeEach(func() {
+							serverResponse = `{
+								"errors": [
+									{
+										"detail": "Unknown request",
+										"title": "CF-NotFound",
+										"code": 10000
+									}
+								]
+							}`
+						})
+
+						It("returns a APINotFoundError", func() {
+							Expect(makeError).To(MatchError(ccerror.APINotFoundError{URL: server.URL() + "/v3/apps"}))
+						})
+					})
+
+					When("a process is not found", func() {
 						BeforeEach(func() {
 							serverResponse = `
 {
@@ -147,7 +166,7 @@ var _ = Describe("Error Wrapper", func() {
 						})
 					})
 
-					Context("when an instance is not found", func() {
+					When("an instance is not found", func() {
 						BeforeEach(func() {
 							serverResponse = `
 {
@@ -166,7 +185,7 @@ var _ = Describe("Error Wrapper", func() {
 						})
 					})
 
-					Context("when an application is not found", func() {
+					When("an application is not found", func() {
 						BeforeEach(func() {
 							serverResponse = `
 {
@@ -185,7 +204,7 @@ var _ = Describe("Error Wrapper", func() {
 						})
 					})
 
-					Context("when a droplet is not found", func() {
+					When("a droplet is not found", func() {
 						BeforeEach(func() {
 							serverResponse = `
 {
@@ -215,19 +234,9 @@ var _ = Describe("Error Wrapper", func() {
 				Context("(422) Unprocessable Entity", func() {
 					BeforeEach(func() {
 						serverResponseCode = http.StatusUnprocessableEntity
-						serverResponse = `
-{
-  "errors": [
-    {
-      "code": 10008,
-      "detail": "SomeCC Error Message",
-      "title": "CF-UnprocessableEntity"
-    }
-  ]
-}`
 					})
 
-					Context("when the name isn't unique to space", func() {
+					When("the name isn't unique to space", func() {
 						BeforeEach(func() {
 							serverResponse = `
 {
@@ -246,7 +255,7 @@ var _ = Describe("Error Wrapper", func() {
 						})
 					})
 
-					Context("when the buildpack is invalid", func() {
+					When("the buildpack is invalid", func() {
 						BeforeEach(func() {
 							serverResponse = `
 {
@@ -265,7 +274,20 @@ var _ = Describe("Error Wrapper", func() {
 						})
 					})
 
-					Context("when the detail describes something else", func() {
+					When("the detail describes something else", func() {
+						BeforeEach(func() {
+							serverResponse = `
+{
+  "errors": [
+    {
+      "code": 10008,
+      "detail": "SomeCC Error Message",
+      "title": "CF-UnprocessableEntity"
+    }
+  ]
+}`
+						})
+
 						It("returns a UnprocessableEntityError", func() {
 							Expect(makeError).To(MatchError(ccerror.UnprocessableEntityError{Message: "SomeCC Error Message"}))
 						})
@@ -273,7 +295,7 @@ var _ = Describe("Error Wrapper", func() {
 				})
 			})
 
-			Context("when the error is a 5XX error", func() {
+			When("the error is a 5XX error", func() {
 				Context("(503) Service Unavailable", func() {
 					BeforeEach(func() {
 						serverResponseCode = http.StatusServiceUnavailable
@@ -283,7 +305,7 @@ var _ = Describe("Error Wrapper", func() {
 						Expect(makeError).To(MatchError(ccerror.ServiceUnavailableError{Message: "SomeCC Error Message"}))
 					})
 
-					Context("when the title is 'CF-TaskWorkersUnavailable'", func() {
+					When("the title is 'CF-TaskWorkersUnavailable'", func() {
 						BeforeEach(func() {
 							serverResponse = `{
   "errors": [
@@ -345,6 +367,44 @@ var _ = Describe("Error Wrapper", func() {
 						RequestIDs: []string{
 							"6e0b4379-f5f7-4b2b-56b0-9ab7e96eed95",
 							"6e0b4379-f5f7-4b2b-56b0-9ab7e96eed95::7445d9db-c31e-410d-8dc5-9f79ec3fc26f",
+						},
+					}))
+				})
+			})
+
+			Context("multiple errors", func() {
+				BeforeEach(func() {
+					serverResponseCode = http.StatusTeapot
+					serverResponse = `{
+							"errors": [
+								{
+									"code": 1000,
+									"detail": "Some CC Error Message",
+									"title": "CF-UnprocessableEntity"
+								},
+								{
+									"code": 1001,
+									"detail": "Some CC Error Message",
+									"title": "CF-UnprocessableEntity"
+								}
+							]
+						}`
+				})
+
+				It("returns a MultiError", func() {
+					Expect(makeError).To(MatchError(ccerror.MultiError{
+						ResponseCode: http.StatusTeapot,
+						Errors: []ccerror.V3Error{
+							{
+								Code:   1000,
+								Detail: "Some CC Error Message",
+								Title:  "CF-UnprocessableEntity",
+							},
+							{
+								Code:   1001,
+								Detail: "Some CC Error Message",
+								Title:  "CF-UnprocessableEntity",
+							},
 						},
 					}))
 				})

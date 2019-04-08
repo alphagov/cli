@@ -62,7 +62,7 @@ var _ = Describe("Plugin Connection", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			Context("when passed a response with a result set", func() {
+			When("passed a response with a result set", func() {
 				It("unmarshals the data into a struct", func() {
 					var body DummyResponse
 					response := Response{
@@ -95,7 +95,7 @@ var _ = Describe("Plugin Connection", func() {
 				})
 			})
 
-			Context("when passed an empty response", func() {
+			When("passed an empty response", func() {
 				It("skips the unmarshalling step", func() {
 					var response Response
 					err := connection.Make(request, &response, nil)
@@ -133,7 +133,7 @@ var _ = Describe("Plugin Connection", func() {
 		})
 
 		Describe("Request errors", func() {
-			Context("when the server does not exist", func() {
+			When("the server does not exist", func() {
 				BeforeEach(func() {
 					connection = NewConnection(false, 0)
 				})
@@ -152,7 +152,7 @@ var _ = Describe("Plugin Connection", func() {
 				})
 			})
 
-			Context("when the server does not have a verified certificate", func() {
+			When("the server does not have a verified certificate", func() {
 				Context("skipSSLValidation is false", func() {
 					BeforeEach(func() {
 						server.AppendHandlers(
@@ -175,7 +175,7 @@ var _ = Describe("Plugin Connection", func() {
 				})
 			})
 
-			Context("when the server's certificate does not match the hostname", func() {
+			When("the server's certificate does not match the hostname", func() {
 				Context("skipSSLValidation is false", func() {
 					BeforeEach(func() {
 						if runtime.GOOS == "windows" {
@@ -190,16 +190,16 @@ var _ = Describe("Plugin Connection", func() {
 						connection = NewConnection(false, 0)
 					})
 
-					// loopback.cli.ci.cf-app.com is a custom DNS record setup to point to 127.0.0.1
+					// loopback.cli.fun is a custom DNS record setup to point to 127.0.0.1
 					It("returns a SSLValidationHostnameError", func() {
-						altHostURL := strings.Replace(server.URL(), "127.0.0.1", "loopback.cli.ci.cf-app.com", -1)
+						altHostURL := strings.Replace(server.URL(), "127.0.0.1", "loopback.cli.fun", -1)
 						request, err := http.NewRequest(http.MethodGet, altHostURL, nil)
 						Expect(err).ToNot(HaveOccurred())
 
 						var response Response
 						err = connection.Make(request, &response, nil)
 						Expect(err).To(MatchError(pluginerror.SSLValidationHostnameError{
-							Message: "x509: certificate is valid for example.com, not loopback.cli.ci.cf-app.com",
+							Message: "x509: certificate is valid for example.com, not loopback.cli.fun",
 						}))
 					})
 				})
@@ -207,7 +207,7 @@ var _ = Describe("Plugin Connection", func() {
 		})
 
 		Describe("4xx and 5xx response codes", func() {
-			Context("when any 4xx or 5xx response codes are encountered", func() {
+			When("any 4xx or 5xx response codes are encountered", func() {
 				var rawResponse string
 
 				BeforeEach(func() {

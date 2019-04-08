@@ -13,11 +13,20 @@ type UserRequirement interface {
 }
 
 type userAPIRequirement struct {
-	username string
-	userRepo api.UserRepository
-	wantGUID bool
+	username   string
+	userRepo   api.UserRepository
+	clientRepo api.ClientRepository
+	wantGUID   bool
+	clientID   string
 
 	user models.UserFields
+}
+
+func NewClientRequirement(clientID string, clientRepo api.ClientRepository) *userAPIRequirement {
+	req := new(userAPIRequirement)
+	req.clientID = clientID
+	req.clientRepo = clientRepo
+	return req
 }
 
 func NewUserRequirement(
@@ -40,6 +49,13 @@ func (req *userAPIRequirement) Execute() error {
 		if err != nil {
 			return err
 		}
+	} else if req.clientID != "" {
+		var err error
+		_, err = req.clientRepo.ClientExists(req.clientID)
+		if err != nil {
+			return err
+		}
+		req.user = models.UserFields{GUID: req.clientID, Username: req.clientID}
 	} else {
 		req.user = models.UserFields{Username: req.username}
 	}

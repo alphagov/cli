@@ -42,20 +42,20 @@ var _ = Describe("Application Manifest Actions", func() {
 			warnings, executeErr = actor.ApplyApplicationManifest(fakeParser, spaceGUID)
 		})
 
-		Context("when given at least one application", func() {
+		When("given at least one application", func() {
 			BeforeEach(func() {
 				fakeParser.AppNamesReturns([]string{"app-1"})
 			})
 
-			Context("when getting the raw manifest bytes is successful", func() {
+			When("getting the raw manifest bytes is successful", func() {
 				var manifestContent []byte
 
 				BeforeEach(func() {
 					manifestContent = []byte("some-manifest-contents")
-					fakeParser.RawManifestReturns(manifestContent, nil)
+					fakeParser.RawAppManifestReturns(manifestContent, nil)
 				})
 
-				Context("when the app exists", func() {
+				When("the app exists", func() {
 					BeforeEach(func() {
 						fakeCloudControllerClient.GetApplicationsReturns(
 							[]ccv3.Application{{GUID: "app-1-guid"}},
@@ -64,7 +64,7 @@ var _ = Describe("Application Manifest Actions", func() {
 						)
 					})
 
-					Context("when applying the manifest succeeds", func() {
+					When("applying the manifest succeeds", func() {
 						BeforeEach(func() {
 							fakeCloudControllerClient.UpdateApplicationApplyManifestReturns(
 								"some-job-url",
@@ -73,7 +73,7 @@ var _ = Describe("Application Manifest Actions", func() {
 							)
 						})
 
-						Context("when polling finishes successfully", func() {
+						When("polling finishes successfully", func() {
 							BeforeEach(func() {
 								fakeCloudControllerClient.PollJobReturns(
 									ccv3.Warnings{"poll-1-warning"},
@@ -83,10 +83,10 @@ var _ = Describe("Application Manifest Actions", func() {
 
 							It("uploads the app manifest", func() {
 								Expect(executeErr).ToNot(HaveOccurred())
-								Expect(warnings).To(Equal(Warnings{"app-1-warning", "apply-manifest-1-warning", "poll-1-warning"}))
+								Expect(warnings).To(ConsistOf("app-1-warning", "apply-manifest-1-warning", "poll-1-warning"))
 
-								Expect(fakeParser.RawManifestCallCount()).To(Equal(1))
-								appName := fakeParser.RawManifestArgsForCall(0)
+								Expect(fakeParser.RawAppManifestCallCount()).To(Equal(1))
+								appName := fakeParser.RawAppManifestArgsForCall(0)
 								Expect(appName).To(Equal("app-1"))
 
 								Expect(fakeCloudControllerClient.GetApplicationsCallCount()).To(Equal(1))
@@ -107,7 +107,7 @@ var _ = Describe("Application Manifest Actions", func() {
 							})
 						})
 
-						Context("when polling returns a generic error", func() {
+						When("polling returns a generic error", func() {
 							var expectedErr error
 
 							BeforeEach(func() {
@@ -120,15 +120,15 @@ var _ = Describe("Application Manifest Actions", func() {
 
 							It("reports a polling error", func() {
 								Expect(executeErr).To(Equal(expectedErr))
-								Expect(warnings).To(Equal(Warnings{"app-1-warning", "apply-manifest-1-warning", "poll-1-warning"}))
+								Expect(warnings).To(ConsistOf("app-1-warning", "apply-manifest-1-warning", "poll-1-warning"))
 							})
 						})
 
-						Context("when polling returns an job failed error", func() {
+						When("polling returns an job failed error", func() {
 							var expectedErr error
 
 							BeforeEach(func() {
-								expectedErr = ccerror.JobFailedError{Message: "some-job-failed"}
+								expectedErr = ccerror.V3JobFailedError{Detail: "some-job-failed"}
 								fakeCloudControllerClient.PollJobReturns(
 									ccv3.Warnings{"poll-1-warning"},
 									expectedErr,
@@ -137,12 +137,12 @@ var _ = Describe("Application Manifest Actions", func() {
 
 							It("reports a polling error", func() {
 								Expect(executeErr).To(Equal(actionerror.ApplicationManifestError{Message: "some-job-failed"}))
-								Expect(warnings).To(Equal(Warnings{"app-1-warning", "apply-manifest-1-warning", "poll-1-warning"}))
+								Expect(warnings).To(ConsistOf("app-1-warning", "apply-manifest-1-warning", "poll-1-warning"))
 							})
 						})
 					})
 
-					Context("when applying the manifest errors", func() {
+					When("applying the manifest errors", func() {
 						var applyErr error
 
 						BeforeEach(func() {
@@ -156,12 +156,12 @@ var _ = Describe("Application Manifest Actions", func() {
 
 						It("reports a error trying to apply the manifest", func() {
 							Expect(executeErr).To(Equal(applyErr))
-							Expect(warnings).To(Equal(Warnings{"app-1-warning", "apply-manifest-1-warning"}))
+							Expect(warnings).To(ConsistOf("app-1-warning", "apply-manifest-1-warning"))
 						})
 					})
 				})
 
-				Context("when there's an error retrieving the application", func() {
+				When("there's an error retrieving the application", func() {
 					var getAppErr error
 
 					BeforeEach(func() {
@@ -176,15 +176,15 @@ var _ = Describe("Application Manifest Actions", func() {
 
 					It("returns error and warnings", func() {
 						Expect(executeErr).To(Equal(getAppErr))
-						Expect(warnings).To(Equal(Warnings{"app-1-warning"}))
+						Expect(warnings).To(ConsistOf("app-1-warning"))
 					})
 				})
 			})
 
-			Context("when generating the raw manifest errors", func() {
+			When("generating the raw manifest errors", func() {
 				getManifestErr := errors.New("get-manifest-error")
 				BeforeEach(func() {
-					fakeParser.RawManifestReturns(nil, getManifestErr)
+					fakeParser.RawAppManifestReturns(nil, getManifestErr)
 				})
 
 				It("returns error", func() {

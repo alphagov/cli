@@ -6,6 +6,7 @@ import (
 
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	. "code.cloudfoundry.org/cli/api/cloudcontroller/ccv3"
+	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/constant"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/ghttp"
@@ -15,11 +16,23 @@ var _ = Describe("Spaces", func() {
 	var client *Client
 
 	BeforeEach(func() {
-		client = NewTestClient()
+		client, _ = NewTestClient()
 	})
 
 	Describe("GetSpaces", func() {
-		Context("when spaces exist", func() {
+		var (
+			query Query
+
+			spaces     []Space
+			warnings   Warnings
+			executeErr error
+		)
+
+		JustBeforeEach(func() {
+			spaces, warnings, executeErr = client.GetSpaces(query)
+		})
+
+		When("spaces exist", func() {
 			BeforeEach(func() {
 				response1 := fmt.Sprintf(`{
 	"pagination": {
@@ -30,24 +43,39 @@ var _ = Describe("Spaces", func() {
   "resources": [
     {
       "name": "space-name-1",
-      "guid": "space-guid-1"
+      "guid": "space-guid-1",
+      "relationships": {
+        "organization": {
+          "data": { "guid": "org-guid-1" }
+        }
+      }
     },
     {
       "name": "space-name-2",
-      "guid": "space-guid-2"
+      "guid": "space-guid-2",
+      "relationships": {
+        "organization": {
+          "data": { "guid": "org-guid-2" }
+        }
+      }
     }
   ]
 }`, server.URL())
 				response2 := `{
-	"pagination": {
-		"next": null
-	},
-	"resources": [
-	  {
+  "pagination": {
+    "next": null
+  },
+  "resources": [
+    {
       "name": "space-name-3",
-		  "guid": "space-guid-3"
-		}
-	]
+      "guid": "space-guid-3",
+      "relationships": {
+        "organization": {
+          "data": { "guid": "org-guid-3" }
+        }
+      }
+    }
+  ]
 }`
 
 				server.AppendHandlers(
@@ -62,25 +90,32 @@ var _ = Describe("Spaces", func() {
 						RespondWith(http.StatusOK, response2, http.Header{"X-Cf-Warnings": {"this is another warning"}}),
 					),
 				)
+
+				query = Query{
+					Key:    NameFilter,
+					Values: []string{"some-space-name"},
+				}
 			})
 
 			It("returns the queried spaces and all warnings", func() {
-				spaces, warnings, err := client.GetSpaces(Query{
-					Key:    NameFilter,
-					Values: []string{"some-space-name"},
-				})
-				Expect(err).NotTo(HaveOccurred())
+				Expect(executeErr).NotTo(HaveOccurred())
 
 				Expect(spaces).To(ConsistOf(
-					Space{Name: "space-name-1", GUID: "space-guid-1"},
-					Space{Name: "space-name-2", GUID: "space-guid-2"},
-					Space{Name: "space-name-3", GUID: "space-guid-3"},
+					Space{Name: "space-name-1", GUID: "space-guid-1", Relationships: Relationships{
+						constant.RelationshipTypeOrganization: Relationship{GUID: "org-guid-1"},
+					}},
+					Space{Name: "space-name-2", GUID: "space-guid-2", Relationships: Relationships{
+						constant.RelationshipTypeOrganization: Relationship{GUID: "org-guid-2"},
+					}},
+					Space{Name: "space-name-3", GUID: "space-guid-3", Relationships: Relationships{
+						constant.RelationshipTypeOrganization: Relationship{GUID: "org-guid-3"},
+					}},
 				))
 				Expect(warnings).To(ConsistOf("this is a warning", "this is another warning"))
 			})
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
   "errors": [
@@ -105,21 +140,18 @@ var _ = Describe("Spaces", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				_, warnings, err := client.GetSpaces()
-				Expect(err).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "Space not found",
-								Title:  "CF-SpaceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "Space not found",
+							Title:  "CF-SpaceNotFound",
 						},
 					},
 				}))

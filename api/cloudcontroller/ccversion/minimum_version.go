@@ -1,21 +1,18 @@
 package ccversion
 
 const (
-	MinVersionDropletUploadV2           = "2.63.0"
-	MinVersionLifecyleStagingV2         = "2.68.0"
-	MinVersionHTTPEndpointHealthCheckV2 = "2.68.0"
-	MinVersionProcessHealthCheckV2      = "2.47.0"
+	MinSupportedV2ClientVersion = "2.100.0"
+	MinSupportedV3ClientVersion = "3.35.0"
 
-	MinVersionHTTPRoutePath                 = "2.36.0"
-	MinVersionTCPRouting                    = "2.53.0"
-	MinVersionNoHostInReservedRouteEndpoint = "2.55.0"
+	MinVersionAsyncBindingsV2                       = "2.120.0"
+	MinVersionBuildpackStackAssociationV2           = "2.112.0"
+	MinVersionSymlinkedFilesV2                      = "2.107.0"
+	MinVersionUserProvidedServiceTagsV2             = "2.104.0"
+	MinVersionInternalDomainV2                      = "2.115.0"
+	MinVersionMultiServiceRegistrationV2            = "2.125.0"
+	MinVersionUpdateServiceNameWhenPlanNotVisibleV2 = "2.131.0"
 
-	MinVersionProvideNameForServiceBinding = "2.99.0"
-
-	MinVersionV3                 = "3.27.0"
-	MinVersionRunTaskV3          = "3.0.0"
-	MinVersionIsolationSegmentV3 = "3.11.0"
 	MinVersionShareServiceV3     = "3.36.0"
-
-	MinVersionManifestBuildpacksV3 = "3.25.0"
+	MinVersionZeroDowntimePushV3 = "3.57.0"
+	MinVersionSpacesGUIDsParamV3 = "3.56.0"
 )

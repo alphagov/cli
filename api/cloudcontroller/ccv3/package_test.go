@@ -1,15 +1,23 @@
 package ccv3_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"strings"
 
+	"code.cloudfoundry.org/cli/api/cloudcontroller"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	. "code.cloudfoundry.org/cli/api/cloudcontroller/ccv3"
+	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/ccv3fakes"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/constant"
+	"code.cloudfoundry.org/cli/api/cloudcontroller/wrapper"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gbytes"
@@ -20,7 +28,7 @@ var _ = Describe("Package", func() {
 	var client *Client
 
 	BeforeEach(func() {
-		client = NewTestClient()
+		client, _ = NewTestClient()
 	})
 
 	Describe("CreatePackage", func() {
@@ -36,8 +44,8 @@ var _ = Describe("Package", func() {
 			pkg, warnings, executeErr = client.CreatePackage(inputPackage)
 		})
 
-		Context("when the package successfully is created", func() {
-			Context("when creating a docker package", func() {
+		When("the package successfully is created", func() {
+			When("creating a docker package", func() {
 				BeforeEach(func() {
 					inputPackage = Package{
 						Type: constant.PackageTypeDocker,
@@ -109,7 +117,7 @@ var _ = Describe("Package", func() {
 				})
 			})
 
-			Context("when creating a bits package", func() {
+			When("creating a bits package", func() {
 				BeforeEach(func() {
 					inputPackage = Package{
 						Type: constant.PackageTypeBits,
@@ -165,7 +173,7 @@ var _ = Describe("Package", func() {
 			})
 		})
 
-		Context("when cc returns back an error or warnings", func() {
+		When("cc returns back an error or warnings", func() {
 			BeforeEach(func() {
 				inputPackage = Package{}
 				response := ` {
@@ -191,20 +199,18 @@ var _ = Describe("Package", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "Package not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "Package not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -224,7 +230,7 @@ var _ = Describe("Package", func() {
 			pkg, warnings, executeErr = client.GetPackage("some-pkg-guid")
 		})
 
-		Context("when the package exist", func() {
+		When("the package exists", func() {
 			BeforeEach(func() {
 				response := `{
   "guid": "some-pkg-guid",
@@ -244,7 +250,7 @@ var _ = Describe("Package", func() {
 				)
 			})
 
-			It("returns the queried packages and all warnings", func() {
+			It("returns the queried package and all warnings", func() {
 				Expect(executeErr).NotTo(HaveOccurred())
 
 				expectedPackage := Package{
@@ -259,7 +265,7 @@ var _ = Describe("Package", func() {
 			})
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
   "errors": [
@@ -284,20 +290,18 @@ var _ = Describe("Package", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "Package not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "Package not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -317,7 +321,7 @@ var _ = Describe("Package", func() {
 			pkgs, warnings, executeErr = client.GetPackages(Query{Key: AppGUIDFilter, Values: []string{"some-app-guid"}})
 		})
 
-		Context("when cloud controller returns list of packages", func() {
+		When("cloud controller returns list of packages", func() {
 			BeforeEach(func() {
 				response := `{
 					"resources": [
@@ -382,7 +386,7 @@ var _ = Describe("Package", func() {
 			})
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
 					"errors": [
@@ -407,24 +411,278 @@ var _ = Describe("Package", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "Package not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "Package not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
 				Expect(warnings).To(ConsistOf("this is a warning"))
+			})
+		})
+	})
+
+	Describe("UploadBitsPackage", func() {
+		var (
+			inputPackage Package
+		)
+
+		BeforeEach(func() {
+			client, _ = NewTestClient()
+
+			inputPackage = Package{
+				Links: map[string]APILink{
+					"upload": {
+						HREF:   fmt.Sprintf("%s/v3/my-special-endpoint/some-pkg-guid/upload", server.URL()),
+						Method: http.MethodPost,
+					},
+				},
+			}
+		})
+
+		When("the upload is successful", func() {
+			var (
+				resources           []Resource
+				readerBody          []byte
+				verifyHeaderAndBody func(http.ResponseWriter, *http.Request)
+			)
+
+			BeforeEach(func() {
+				resources = []Resource{
+					{FilePath: "foo"},
+					{FilePath: "bar"},
+				}
+
+				response := `{
+						"guid": "some-package-guid",
+						"type": "bits",
+						"state": "PROCESSING_UPLOAD"
+					}`
+
+				server.AppendHandlers(
+					CombineHandlers(
+						VerifyRequest(http.MethodPost, "/v3/my-special-endpoint/some-pkg-guid/upload"),
+						func(writer http.ResponseWriter, req *http.Request) {
+							verifyHeaderAndBody(writer, req)
+						},
+						RespondWith(http.StatusOK, response, http.Header{"X-Cf-Warnings": {"this is a warning"}}),
+					),
+				)
+			})
+
+			When("the upload has application bits to upload", func() {
+				var reader io.Reader
+
+				BeforeEach(func() {
+					readerBody = []byte("hello world")
+					reader = bytes.NewReader(readerBody)
+
+					verifyHeaderAndBody = func(_ http.ResponseWriter, req *http.Request) {
+						contentType := req.Header.Get("Content-Type")
+						Expect(contentType).To(MatchRegexp("multipart/form-data; boundary=[\\w\\d]+"))
+
+						defer req.Body.Close()
+						requestReader := multipart.NewReader(req.Body, contentType[30:])
+
+						// Verify that matched resources are sent properly
+						resourcesPart, err := requestReader.NextPart()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(resourcesPart.FormName()).To(Equal("resources"))
+
+						defer resourcesPart.Close()
+						expectedJSON, err := json.Marshal(resources)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(ioutil.ReadAll(resourcesPart)).To(MatchJSON(expectedJSON))
+
+						// Verify that the application bits are sent properly
+						resourcesPart, err = requestReader.NextPart()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(resourcesPart.FormName()).To(Equal("bits"))
+						Expect(resourcesPart.FileName()).To(Equal("package.zip"))
+
+						defer resourcesPart.Close()
+						Expect(ioutil.ReadAll(resourcesPart)).To(Equal(readerBody))
+					}
+				})
+
+				It("returns the created job and warnings", func() {
+					pkg, warnings, err := client.UploadBitsPackage(inputPackage, resources, reader, int64(len(readerBody)))
+					Expect(err).NotTo(HaveOccurred())
+					Expect(warnings).To(ConsistOf("this is a warning"))
+					Expect(pkg).To(Equal(Package{
+						GUID:  "some-package-guid",
+						Type:  constant.PackageTypeBits,
+						State: constant.PackageProcessingUpload,
+					}))
+				})
+			})
+
+			When("there are no application bits to upload", func() {
+				BeforeEach(func() {
+					verifyHeaderAndBody = func(_ http.ResponseWriter, req *http.Request) {
+						contentType := req.Header.Get("Content-Type")
+						Expect(contentType).To(MatchRegexp("multipart/form-data; boundary=[\\w\\d]+"))
+
+						defer req.Body.Close()
+						requestReader := multipart.NewReader(req.Body, contentType[30:])
+
+						// Verify that matched resources are sent properly
+						resourcesPart, err := requestReader.NextPart()
+						Expect(err).NotTo(HaveOccurred())
+
+						Expect(resourcesPart.FormName()).To(Equal("resources"))
+
+						defer resourcesPart.Close()
+						expectedJSON, err := json.Marshal(resources)
+						Expect(err).NotTo(HaveOccurred())
+						Expect(ioutil.ReadAll(resourcesPart)).To(MatchJSON(expectedJSON))
+
+						// Verify that the application bits are not sent
+						_, err = requestReader.NextPart()
+						Expect(err).To(MatchError(io.EOF))
+					}
+				})
+
+				It("does not send the application bits", func() {
+					pkg, warnings, err := client.UploadBitsPackage(inputPackage, resources, nil, 33513531353)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(warnings).To(ConsistOf("this is a warning"))
+					Expect(pkg).To(Equal(Package{
+						GUID:  "some-package-guid",
+						Type:  constant.PackageTypeBits,
+						State: constant.PackageProcessingUpload,
+					}))
+				})
+			})
+		})
+
+		When("the CC returns an error", func() {
+			BeforeEach(func() {
+				response := ` {
+					"errors": [
+						{
+							"code": 10008,
+							"detail": "Banana",
+							"title": "CF-Banana"
+						}
+					]
+				}`
+
+				server.AppendHandlers(
+					CombineHandlers(
+						VerifyRequest(http.MethodPost, "/v3/my-special-endpoint/some-pkg-guid/upload"),
+						RespondWith(http.StatusNotFound, response, http.Header{"X-Cf-Warnings": {"this is a warning"}}),
+					),
+				)
+			})
+
+			It("returns the error", func() {
+				_, warnings, err := client.UploadBitsPackage(inputPackage, []Resource{}, bytes.NewReader(nil), 0)
+				Expect(err).To(MatchError(ccerror.ResourceNotFoundError{Message: "Banana"}))
+				Expect(warnings).To(ConsistOf("this is a warning"))
+			})
+		})
+
+		When("passed a nil resources", func() {
+			It("returns a NilObjectError", func() {
+				_, _, err := client.UploadBitsPackage(inputPackage, nil, bytes.NewReader(nil), 0)
+				Expect(err).To(MatchError(ccerror.NilObjectError{Object: "matchedResources"}))
+			})
+		})
+
+		When("an error is returned from the new resources reader", func() {
+			var (
+				fakeReader  *ccv3fakes.FakeReader
+				expectedErr error
+			)
+
+			BeforeEach(func() {
+				expectedErr = errors.New("some read error")
+				fakeReader = new(ccv3fakes.FakeReader)
+				fakeReader.ReadReturns(0, expectedErr)
+
+				server.AppendHandlers(
+					VerifyRequest(http.MethodPost, "/v3/my-special-endpoint/some-pkg-guid/upload"),
+				)
+			})
+
+			It("returns the error", func() {
+				_, _, err := client.UploadBitsPackage(inputPackage, []Resource{}, fakeReader, 3)
+				Expect(err).To(MatchError(expectedErr))
+			})
+		})
+
+		When("a retryable error occurs", func() {
+			BeforeEach(func() {
+				wrapper := &wrapper.CustomWrapper{
+					CustomMake: func(connection cloudcontroller.Connection, request *cloudcontroller.Request, response *cloudcontroller.Response) error {
+						defer GinkgoRecover() // Since this will be running in a thread
+
+						if strings.HasSuffix(request.URL.String(), "/v3/my-special-endpoint/some-pkg-guid/upload") {
+							_, err := ioutil.ReadAll(request.Body)
+							Expect(err).ToNot(HaveOccurred())
+							Expect(request.Body.Close()).ToNot(HaveOccurred())
+							return request.ResetBody()
+						}
+						return connection.Make(request, response)
+					},
+				}
+
+				client, _ = NewTestClient(Config{Wrappers: []ConnectionWrapper{wrapper}})
+			})
+
+			It("returns the PipeSeekError", func() {
+				_, _, err := client.UploadBitsPackage(inputPackage, []Resource{}, strings.NewReader("hello world"), 3)
+				Expect(err).To(MatchError(ccerror.PipeSeekError{}))
+			})
+		})
+
+		When("an http error occurs mid-transfer", func() {
+			var expectedErr error
+			const UploadSize = 33 * 1024
+
+			BeforeEach(func() {
+				expectedErr = errors.New("some read error")
+
+				wrapper := &wrapper.CustomWrapper{
+					CustomMake: func(connection cloudcontroller.Connection, request *cloudcontroller.Request, response *cloudcontroller.Response) error {
+						defer GinkgoRecover() // Since this will be running in a thread
+
+						if strings.HasSuffix(request.URL.String(), "/v3/my-special-endpoint/some-pkg-guid/upload") {
+							defer request.Body.Close()
+							readBytes, err := ioutil.ReadAll(request.Body)
+							Expect(err).ToNot(HaveOccurred())
+							Expect(len(readBytes)).To(BeNumerically(">", UploadSize))
+							return expectedErr
+						}
+						return connection.Make(request, response)
+					},
+				}
+
+				client, _ = NewTestClient(Config{Wrappers: []ConnectionWrapper{wrapper}})
+			})
+
+			It("returns the http error", func() {
+				_, _, err := client.UploadBitsPackage(inputPackage, []Resource{}, strings.NewReader(strings.Repeat("a", UploadSize)), 3)
+				Expect(err).To(MatchError(expectedErr))
+			})
+		})
+
+		When("the input package does not have an upload link", func() {
+			It("returns an UploadLinkNotFoundError", func() {
+				_, _, err := client.UploadBitsPackage(Package{GUID: "some-pkg-guid"}, nil, nil, 0)
+				Expect(err).To(MatchError(ccerror.UploadLinkNotFoundError{PackageGUID: "some-pkg-guid"}))
 			})
 		})
 	})
@@ -443,7 +701,7 @@ var _ = Describe("Package", func() {
 			pkg, warnings, executeErr = client.UploadPackage(inputPackage, fileToUpload)
 		})
 
-		Context("when the package successfully is created", func() {
+		When("the package successfully is created", func() {
 			var tempFile *os.File
 
 			BeforeEach(func() {
@@ -527,7 +785,7 @@ var _ = Describe("Package", func() {
 			})
 		})
 
-		Context("when the package does not have an upload link", func() {
+		When("the package does not have an upload link", func() {
 			BeforeEach(func() {
 				inputPackage = Package{GUID: "some-pkg-guid", State: constant.PackageAwaitingUpload}
 				fileToUpload = "/path/to/foo"
@@ -538,7 +796,7 @@ var _ = Describe("Package", func() {
 			})
 		})
 
-		Context("when cc returns back an error or warnings", func() {
+		When("cc returns back an error or warnings", func() {
 			var tempFile *os.File
 
 			BeforeEach(func() {
@@ -567,11 +825,16 @@ var _ = Describe("Package", func() {
 
 				response := ` {
 					"errors": [
-					{
-						"code": 10008,
-						"detail": "The request is semantically invalid: command presence",
-						"title": "CF-UnprocessableEntity"
-					}
+						{
+							"code": 10008,
+							"detail": "The request is semantically invalid: command presence",
+							"title": "CF-UnprocessableEntity"
+						},
+						{
+							"code": 10008,
+							"detail": "The request is semantically invalid: command presence",
+							"title": "CF-UnprocessableEntity"
+						}
 					]
 				}`
 
@@ -590,15 +853,18 @@ var _ = Describe("Package", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
 						},
 					},
 				}))

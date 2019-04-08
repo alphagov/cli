@@ -5,6 +5,7 @@ import (
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2/constant"
+	uaaconst "code.cloudfoundry.org/cli/api/uaa/constant"
 )
 
 // Organization represents a CLI Organization.
@@ -47,6 +48,48 @@ func (actor Actor) GetOrganizationByName(orgName string) (Organization, Warnings
 	return Organization(orgs[0]), Warnings(warnings), nil
 }
 
+// GrantOrgManagerByUsername gives the Org Manager role to the provided user.
+func (actor Actor) GrantOrgManagerByUsername(guid string, username string) (Warnings, error) {
+	var warnings ccv2.Warnings
+	var err error
+
+	if actor.Config.UAAGrantType() != string(uaaconst.GrantTypeClientCredentials) {
+		warnings, err = actor.CloudControllerClient.UpdateOrganizationManagerByUsername(guid, username)
+	} else {
+		warnings, err = actor.CloudControllerClient.UpdateOrganizationManager(guid, username)
+	}
+
+	return Warnings(warnings), err
+}
+
+// CreateOrganization creates an Organization based on the provided orgName.
+func (actor Actor) CreateOrganization(orgName string, quotaName string) (Organization, Warnings, error) {
+	var quotaGUID string
+	var allWarnings Warnings
+
+	if quotaName != "" {
+		quota, warnings, err := actor.GetOrganizationQuotaByName(quotaName)
+
+		allWarnings = append(allWarnings, warnings...)
+		if err != nil {
+			return Organization{}, allWarnings, err
+		}
+
+		quotaGUID = quota.GUID
+	}
+
+	org, warnings, err := actor.CloudControllerClient.CreateOrganization(orgName, quotaGUID)
+	allWarnings = append(allWarnings, warnings...)
+	if _, ok := err.(ccerror.OrganizationNameTakenError); ok {
+		return Organization{}, allWarnings, actionerror.OrganizationNameTakenError{Name: orgName}
+	}
+	if err != nil {
+		return Organization{}, allWarnings, err
+	}
+
+	return Organization(org), allWarnings, nil
+}
+
 // DeleteOrganization deletes the Organization associated with the provided
 // GUID. Once the deletion request is sent, it polls the deletion job until
 // it's finished.
@@ -73,6 +116,7 @@ func (actor Actor) DeleteOrganization(orgName string) (Warnings, error) {
 	return allWarnings, err
 }
 
+// GetOrganizations returns all the available organizations.
 func (actor Actor) GetOrganizations() ([]Organization, Warnings, error) {
 	var returnedOrgs []Organization
 	orgs, warnings, err := actor.CloudControllerClient.GetOrganizations()
@@ -80,4 +124,23 @@ func (actor Actor) GetOrganizations() ([]Organization, Warnings, error) {
 		returnedOrgs = append(returnedOrgs, Organization(org))
 	}
 	return returnedOrgs, Warnings(warnings), err
+}
+
+// OrganizationExistsWithName returns true if there is an Organization with the
+// provided name, otherwise false.
+func (actor Actor) OrganizationExistsWithName(orgName string) (bool, Warnings, error) {
+	orgs, warnings, err := actor.CloudControllerClient.GetOrganizations(ccv2.Filter{
+		Type:     constant.NameFilter,
+		Operator: constant.EqualOperator,
+		Values:   []string{orgName},
+	})
+	if err != nil {
+		return false, Warnings(warnings), err
+	}
+
+	if len(orgs) == 0 {
+		return false, Warnings(warnings), nil
+	}
+
+	return true, Warnings(warnings), nil
 }

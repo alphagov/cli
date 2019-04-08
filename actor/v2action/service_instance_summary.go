@@ -5,12 +5,15 @@ import (
 	"sort"
 
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
+	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv2/constant"
 	"code.cloudfoundry.org/cli/util/sorting"
 	log "github.com/sirupsen/logrus"
 )
 
 type ServiceInstanceShareType string
+
+type LastOperation ccv2.LastOperation
 
 const (
 	ServiceInstanceIsSharedFrom ServiceInstanceShareType = "SharedFrom"
@@ -48,6 +51,7 @@ func (s ServiceInstanceSummary) IsSharedTo() bool {
 
 type BoundApplication struct {
 	AppName            string
+	LastOperation      LastOperation
 	ServiceBindingName string
 }
 
@@ -63,31 +67,39 @@ func (actor Actor) GetServiceInstanceSummaryByNameAndSpace(name string, spaceGUI
 }
 
 func (actor Actor) GetServiceInstancesSummaryBySpace(spaceGUID string) ([]ServiceInstanceSummary, Warnings, error) {
-	serviceInstances, warnings, err := actor.CloudControllerClient.GetSpaceServiceInstances(
-		spaceGUID,
-		true)
+	spaceSummary, warnings, err := actor.CloudControllerClient.GetSpaceSummary(spaceGUID)
 	allWarnings := Warnings(warnings)
-
-	log.WithField("number_of_service_instances", len(serviceInstances)).Info("listing number of service instances")
-
-	var summaryInstances []ServiceInstanceSummary
-	for _, instance := range serviceInstances {
-		serviceInstanceSummary, summaryInfoWarnings, summaryInfoErr := actor.getSummaryInfoCompositeForInstance(
-			spaceGUID,
-			ServiceInstance(instance),
-			false)
-		allWarnings = append(allWarnings, summaryInfoWarnings...)
-		if summaryInfoErr != nil {
-			return nil, allWarnings, summaryInfoErr
-		}
-		summaryInstances = append(summaryInstances, serviceInstanceSummary)
+	if err != nil {
+		return []ServiceInstanceSummary{}, allWarnings, err
 	}
 
-	sort.Slice(summaryInstances, func(i, j int) bool {
-		return sorting.LessIgnoreCase(summaryInstances[i].Name, summaryInstances[j].Name)
-	})
+	services, warnings, err := actor.CloudControllerClient.GetServices()
+	allWarnings = append(allWarnings, warnings...)
+	if err != nil {
+		return []ServiceInstanceSummary{}, allWarnings, err
+	}
 
-	return summaryInstances, allWarnings, err
+	serviceGUIDToBrokerName := map[string]string{}
+	for _, service := range services {
+		serviceGUIDToBrokerName[service.GUID] = service.ServiceBrokerName
+	}
+
+	var serviceInstanceSummaries []ServiceInstanceSummary
+	for _, serviceInstance := range spaceSummary.ServiceInstances {
+		instanceSummary := ServiceInstanceSummary{}
+
+		instanceSummary.Name = serviceInstance.Name
+		instanceSummary.ServicePlan.Name = serviceInstance.ServicePlan.Name
+		instanceSummary.Service.Label = serviceInstance.ServicePlan.Service.Label
+		instanceSummary.LastOperation = serviceInstance.LastOperation
+		instanceSummary.Service.ServiceBrokerName = serviceGUIDToBrokerName[serviceInstance.ServicePlan.Service.GUID]
+		instanceSummary.ServiceInstance.Type = discoverServiceInstanceType(serviceInstance)
+		instanceSummary.BoundApplications = findServiceInstanceBoundApplications(serviceInstance.Name, spaceSummary.Applications)
+
+		serviceInstanceSummaries = append(serviceInstanceSummaries, instanceSummary)
+	}
+
+	return serviceInstanceSummaries, allWarnings, nil
 }
 
 // getAndSetSharedInformation gets a service instance's shared from or shared to information,
@@ -234,7 +246,13 @@ func (actor Actor) getSummaryInfoCompositeForInstance(spaceGUID string, serviceI
 			return serviceInstanceSummary, allWarnings, err
 		}
 
-		serviceInstanceSummary.BoundApplications = append(serviceInstanceSummary.BoundApplications, BoundApplication{AppName: app.Name, ServiceBindingName: serviceBinding.Name})
+		serviceInstanceSummary.BoundApplications = append(
+			serviceInstanceSummary.BoundApplications,
+			BoundApplication{
+				AppName:            app.Name,
+				ServiceBindingName: serviceBinding.Name,
+				LastOperation:      LastOperation(serviceBinding.LastOperation),
+			})
 	}
 
 	sort.Slice(
@@ -244,4 +262,31 @@ func (actor Actor) getSummaryInfoCompositeForInstance(spaceGUID string, serviceI
 		})
 
 	return serviceInstanceSummary, allWarnings, nil
+}
+
+func findServiceInstanceBoundApplications(instanceName string, spaceApps []ccv2.SpaceSummaryApplication) []BoundApplication {
+	var applicationNames []BoundApplication
+
+	for _, app := range spaceApps {
+		for _, name := range app.ServiceNames {
+			if name == instanceName {
+				applicationNames = append(applicationNames, BoundApplication{AppName: app.Name})
+			}
+		}
+	}
+
+	return applicationNames
+}
+
+func discoverServiceInstanceType(instance ccv2.SpaceSummaryServiceInstance) constant.ServiceInstanceType {
+	if isUserProvided(instance) {
+		return constant.ServiceInstanceTypeUserProvidedService
+	}
+	return constant.ServiceInstanceTypeManagedService
+}
+
+func isUserProvided(instance ccv2.SpaceSummaryServiceInstance) bool {
+	// For now we rely on empty service_plan guid to decide if the instance is user provided or managed
+	// This could be improved in future if we add the Type of the service instnace to the summary endpoint result body
+	return instance.ServicePlan.GUID == ""
 }

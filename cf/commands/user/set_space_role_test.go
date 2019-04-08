@@ -14,10 +14,10 @@ import (
 	"code.cloudfoundry.org/cli/cf/api/apifakes"
 	"code.cloudfoundry.org/cli/cf/api/featureflags/featureflagsfakes"
 	"code.cloudfoundry.org/cli/cf/api/spaces/spacesfakes"
-	testconfig "code.cloudfoundry.org/cli/util/testhelpers/configuration"
-	testterm "code.cloudfoundry.org/cli/util/testhelpers/terminal"
+	testconfig "code.cloudfoundry.org/cli/cf/util/testhelpers/configuration"
+	testterm "code.cloudfoundry.org/cli/cf/util/testhelpers/terminal"
 
-	. "code.cloudfoundry.org/cli/util/testhelpers/matchers"
+	. "code.cloudfoundry.org/cli/cf/util/testhelpers/matchers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -59,7 +59,7 @@ var _ = Describe("SetSpaceRole", func() {
 		cmd = &user.SetSpaceRole{}
 		cmd.SetDependency(deps, false)
 
-		flagContext = flags.NewFlagContext(map[string]flags.FlagSet{})
+		flagContext = flags.NewFlagContext(cmd.MetaData().Flags)
 
 		factory = new(requirementsfakes.FakeFactory)
 
@@ -69,6 +69,7 @@ var _ = Describe("SetSpaceRole", func() {
 		userRequirement = new(requirementsfakes.FakeUserRequirement)
 		userRequirement.ExecuteReturns(nil)
 		factory.NewUserRequirementReturns(userRequirement)
+		factory.NewClientRequirementReturns(userRequirement)
 
 		organizationRequirement = new(requirementsfakes.FakeOrganizationRequirement)
 		organizationRequirement.ExecuteReturns(nil)
@@ -114,72 +115,32 @@ var _ = Describe("SetSpaceRole", func() {
 				Expect(actualRequirements).To(ContainElement(organizationRequirement))
 			})
 
-			Context("when the config version is >=2.37.0", func() {
+			It("requests the set_roles_by_username flag", func() {
+				cmd.Requirements(factory, flagContext)
+				Expect(flagRepo.FindByNameCallCount()).To(Equal(1))
+				Expect(flagRepo.FindByNameArgsForCall(0)).To(Equal("set_roles_by_username"))
+			})
+
+			Context("when the set_roles_by_username flag exists and is enabled", func() {
 				BeforeEach(func() {
-					configRepo.SetAPIVersion("2.37.0")
+					flagRepo.FindByNameReturns(models.FeatureFlag{Enabled: true}, nil)
 				})
 
-				It("requests the set_roles_by_username flag", func() {
-					cmd.Requirements(factory, flagContext)
-					Expect(flagRepo.FindByNameCallCount()).To(Equal(1))
-					Expect(flagRepo.FindByNameArgsForCall(0)).To(Equal("set_roles_by_username"))
-				})
+				It("returns a UserRequirement", func() {
+					actualRequirements, err := cmd.Requirements(factory, flagContext)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(factory.NewUserRequirementCallCount()).To(Equal(1))
+					actualUsername, actualWantGUID := factory.NewUserRequirementArgsForCall(0)
+					Expect(actualUsername).To(Equal("the-user-name"))
+					Expect(actualWantGUID).To(BeFalse())
 
-				Context("when the set_roles_by_username flag exists and is enabled", func() {
-					BeforeEach(func() {
-						flagRepo.FindByNameReturns(models.FeatureFlag{Enabled: true}, nil)
-					})
-
-					It("returns a UserRequirement", func() {
-						actualRequirements, err := cmd.Requirements(factory, flagContext)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(factory.NewUserRequirementCallCount()).To(Equal(1))
-						actualUsername, actualWantGUID := factory.NewUserRequirementArgsForCall(0)
-						Expect(actualUsername).To(Equal("the-user-name"))
-						Expect(actualWantGUID).To(BeFalse())
-
-						Expect(actualRequirements).To(ContainElement(userRequirement))
-					})
-				})
-
-				Context("when the set_roles_by_username flag exists and is disabled", func() {
-					BeforeEach(func() {
-						flagRepo.FindByNameReturns(models.FeatureFlag{Enabled: false}, nil)
-					})
-
-					It("returns a UserRequirement", func() {
-						actualRequirements, err := cmd.Requirements(factory, flagContext)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(factory.NewUserRequirementCallCount()).To(Equal(1))
-						actualUsername, actualWantGUID := factory.NewUserRequirementArgsForCall(0)
-						Expect(actualUsername).To(Equal("the-user-name"))
-						Expect(actualWantGUID).To(BeTrue())
-
-						Expect(actualRequirements).To(ContainElement(userRequirement))
-					})
-				})
-
-				Context("when the set_roles_by_username flag cannot be retrieved", func() {
-					BeforeEach(func() {
-						flagRepo.FindByNameReturns(models.FeatureFlag{}, errors.New("some error"))
-					})
-
-					It("returns a UserRequirement", func() {
-						actualRequirements, err := cmd.Requirements(factory, flagContext)
-						Expect(err).NotTo(HaveOccurred())
-						Expect(factory.NewUserRequirementCallCount()).To(Equal(1))
-						actualUsername, actualWantGUID := factory.NewUserRequirementArgsForCall(0)
-						Expect(actualUsername).To(Equal("the-user-name"))
-						Expect(actualWantGUID).To(BeTrue())
-
-						Expect(actualRequirements).To(ContainElement(userRequirement))
-					})
+					Expect(actualRequirements).To(ContainElement(userRequirement))
 				})
 			})
 
-			Context("when the config version is <2.37.0", func() {
+			Context("when the set_roles_by_username flag exists and is disabled", func() {
 				BeforeEach(func() {
-					configRepo.SetAPIVersion("2.36.0")
+					flagRepo.FindByNameReturns(models.FeatureFlag{Enabled: false}, nil)
 				})
 
 				It("returns a UserRequirement", func() {
@@ -192,6 +153,44 @@ var _ = Describe("SetSpaceRole", func() {
 
 					Expect(actualRequirements).To(ContainElement(userRequirement))
 				})
+			})
+
+			Context("when the set_roles_by_username flag cannot be retrieved", func() {
+				BeforeEach(func() {
+					flagRepo.FindByNameReturns(models.FeatureFlag{}, errors.New("some error"))
+				})
+
+				It("returns a UserRequirement", func() {
+					actualRequirements, err := cmd.Requirements(factory, flagContext)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(factory.NewUserRequirementCallCount()).To(Equal(1))
+					actualUsername, actualWantGUID := factory.NewUserRequirementArgsForCall(0)
+					Expect(actualUsername).To(Equal("the-user-name"))
+					Expect(actualWantGUID).To(BeTrue())
+
+					Expect(actualRequirements).To(ContainElement(userRequirement))
+				})
+			})
+		})
+
+		Context("when given the --client flag", func() {
+			BeforeEach(func() {
+				flagContext.Parse("the-client-id", "the-org-name", "the-space-name", "OrgManager", "--client")
+			})
+
+			It("returns a User Requirement with USERNAME field as it's GUID", func() {
+				actualRequirements, err := cmd.Requirements(factory, flagContext)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(factory.NewClientRequirementCallCount()).To(Equal(1))
+				actualUsername := factory.NewClientRequirementArgsForCall(0)
+				Expect(actualUsername).To(Equal("the-client-id"))
+
+				Expect(actualRequirements).To(ContainElement(userRequirement))
+			})
+
+			It("ignores the set_roles_by_username feature flag", func() {
+				cmd.Requirements(factory, flagContext)
+				Expect(flagRepo.FindByNameCallCount()).To(BeZero())
 			})
 		})
 	})
@@ -229,6 +228,21 @@ var _ = Describe("SetSpaceRole", func() {
 			It("returns an error", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("space-repo-error"))
+			})
+		})
+
+		Context("when provided a differently cased role", func() {
+			BeforeEach(func() {
+				flagContext.Parse("the-user-name", "the-org-name", "the-space-name", "spacemanager")
+				userRequirement.GetUserReturns(models.UserFields{Username: "the-user-name"})
+			})
+
+			It("tells the user it is assigning the role", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ui.Outputs()).To(ContainSubstrings(
+					[]string{"Assigning role", "SpaceManager", "the-user-name", "the-org", "the-user-name"},
+					[]string{"OK"},
+				))
 			})
 		})
 

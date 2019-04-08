@@ -26,6 +26,450 @@ var _ = Describe("Service Instance Actions", func() {
 		actor = NewActor(fakeCloudControllerClient, nil, nil)
 	})
 
+	Describe("CreateServiceInstance", func() {
+		var (
+			serviceInstance       ServiceInstance
+			createServiceWarnings Warnings
+			createServiceErr      error
+		)
+
+		When("no broker name is specified", func() {
+			JustBeforeEach(func() {
+				serviceInstance, createServiceWarnings, createServiceErr = actor.CreateServiceInstance("space-guid", "service", "service-plan", "service-instance", "", map[string]interface{}{"some": "params"}, []string{"tag-1", "tag-2"})
+			})
+
+			When("there are no errors creating a service instance", func() {
+				var returnedInstance ccv2.ServiceInstance
+
+				BeforeEach(func() {
+					returnedInstance = ccv2.ServiceInstance{
+						GUID:            "some-service-guid",
+						Name:            "service",
+						SpaceGUID:       "space-guid",
+						ServiceGUID:     "service-guid",
+						ServicePlanGUID: "service-plan-guid",
+						Type:            constant.ServiceInstanceTypeManagedService,
+						Tags:            []string{"some", "tags"},
+						DashboardURL:    "http://dashboard.com",
+						LastOperation:   ccv2.LastOperation{},
+					}
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{{
+							GUID:              "a-service-guid",
+							ServiceBrokerName: "some-broker",
+						}},
+						nil,
+						nil,
+					)
+					fakeCloudControllerClient.GetServicePlansReturns(
+						[]ccv2.ServicePlan{
+							{
+								GUID: "a-random-service-plan-guid",
+								Name: "service-plan-2",
+							},
+							{
+								GUID: "the-service-plan-guid",
+								Name: "service-plan",
+							},
+						},
+						nil,
+						nil)
+					fakeCloudControllerClient.CreateServiceInstanceReturns(
+						returnedInstance,
+						ccv2.Warnings{"create-service-instance-warning"},
+						nil)
+				})
+
+				It("returns the service instance and warnings", func() {
+					By("getting the space services")
+					Expect(createServiceErr).ToNot(HaveOccurred())
+					Expect(serviceInstance).To(Equal(ServiceInstance(returnedInstance)))
+					Expect(createServiceWarnings).To(ConsistOf("create-service-instance-warning"))
+
+					Expect(fakeCloudControllerClient.GetSpaceServicesCallCount()).To(Equal(1))
+					spaceGUID, serviceFilter := fakeCloudControllerClient.GetSpaceServicesArgsForCall(0)
+					Expect(spaceGUID).Should(Equal("space-guid"))
+					Expect(serviceFilter).Should(Equal([]ccv2.Filter{{
+						Type:     constant.LabelFilter,
+						Operator: constant.EqualOperator,
+						Values:   []string{"service"},
+					}},
+					))
+
+					By("getting the plans of the service")
+					Expect(fakeCloudControllerClient.GetServicePlansCallCount()).To(Equal(1))
+					planFilter := fakeCloudControllerClient.GetServicePlansArgsForCall(0)
+					Expect(planFilter).Should(Equal([]ccv2.Filter{{
+						Type:     constant.ServiceGUIDFilter,
+						Operator: constant.EqualOperator,
+						Values:   []string{"a-service-guid"},
+					}},
+					))
+
+					By("creating the service instance")
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(1))
+					spaceGUID, planGUID, serviceInstanceName, parameters, tags := fakeCloudControllerClient.CreateServiceInstanceArgsForCall(0)
+					Expect(serviceInstanceName).To(Equal("service-instance"))
+					Expect(spaceGUID).To(Equal("space-guid"))
+					Expect(planGUID).To(Equal("the-service-plan-guid"))
+					Expect(parameters).To(Equal(map[string]interface{}{
+						"some": "params",
+					}))
+					Expect(tags).To(ConsistOf("tag-1", "tag-2"))
+				})
+			})
+
+			When("there are errors creating a service instance", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{{
+							GUID: "a-service-guid",
+						}},
+						nil,
+						nil,
+					)
+					fakeCloudControllerClient.GetServicePlansReturns(
+						[]ccv2.ServicePlan{{
+							GUID: "the-service-plan-guid",
+							Name: "service-plan",
+						}},
+						nil,
+						nil)
+
+					fakeCloudControllerClient.CreateServiceInstanceReturns(
+						ccv2.ServiceInstance{},
+						ccv2.Warnings{"create-service-instance-warning"},
+						errors.New("boom"))
+				})
+
+				It("returns the error and warnings", func() {
+					Expect(serviceInstance).To(Equal(ServiceInstance{}))
+					Expect(createServiceErr).To(MatchError("boom"))
+					Expect(createServiceWarnings).To(ConsistOf("create-service-instance-warning"))
+
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(1))
+				})
+			})
+
+			When("there are no matching services", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{},
+						ccv2.Warnings{"service-warnings"},
+						nil,
+					)
+				})
+
+				It("returns the error and warnings", func() {
+					Expect(serviceInstance).To(Equal(ServiceInstance{}))
+					Expect(createServiceErr).To(MatchError(actionerror.ServiceNotFoundError{Name: "service"}))
+					Expect(createServiceWarnings).To(ConsistOf("service-warnings"))
+
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(0))
+				})
+			})
+
+			When("getting services returns an error", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{},
+						ccv2.Warnings{"service-warnings"},
+						errors.New("boom"),
+					)
+				})
+
+				It("returns the error and warnings", func() {
+					Expect(serviceInstance).To(Equal(ServiceInstance{}))
+					Expect(createServiceErr).To(MatchError("boom"))
+					Expect(createServiceWarnings).To(ConsistOf("service-warnings"))
+
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(0))
+				})
+			})
+
+			When("getting service plan returns an error", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{{
+							GUID: "a-service-guid",
+						}},
+						nil,
+						nil,
+					)
+					fakeCloudControllerClient.GetServicePlansReturns(
+						[]ccv2.ServicePlan{},
+						ccv2.Warnings{"get-plan-warning"},
+						errors.New("boom"),
+					)
+				})
+
+				It("returns the error and warnings", func() {
+					Expect(serviceInstance).To(Equal(ServiceInstance{}))
+					Expect(createServiceErr).To(MatchError("boom"))
+					Expect(createServiceWarnings).To(ConsistOf("get-plan-warning"))
+
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(0))
+				})
+			})
+
+			When("no matching plan", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{{
+							GUID: "a-service-guid",
+						}},
+						nil,
+						nil,
+					)
+					fakeCloudControllerClient.GetServicePlansReturns(
+						[]ccv2.ServicePlan{{
+							GUID: "the-service-plan-guid",
+							Name: "service-plan-2",
+						}},
+						ccv2.Warnings{"get-plan-warning"},
+						nil)
+				})
+
+				It("returns the error and warnings", func() {
+					Expect(serviceInstance).To(Equal(ServiceInstance{}))
+					Expect(createServiceErr).To(MatchError(actionerror.ServicePlanNotFoundError{PlanName: "service-plan", ServiceName: "service"}))
+					Expect(createServiceWarnings).To(ConsistOf("get-plan-warning"))
+
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(0))
+				})
+			})
+
+			When("there are warnings", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{
+							{Label: "service-1", GUID: "service-guid-1"},
+						},
+						[]string{"foo"},
+						nil)
+
+					fakeCloudControllerClient.GetServicePlansReturns(
+						[]ccv2.ServicePlan{
+							{Name: "service-plan", GUID: "service-plan-guid-1"},
+						},
+						[]string{"bar"},
+						nil)
+					fakeCloudControllerClient.CreateServiceInstanceReturns(
+						ccv2.ServiceInstance{},
+						[]string{"baz", "qux"},
+						nil)
+				})
+
+				It("returns the warnings", func() {
+					Expect(createServiceWarnings).To(ConsistOf([]string{"foo", "bar", "baz", "qux"}))
+				})
+			})
+
+			When("there are multiple available services by the same name", func() {
+				BeforeEach(func() {
+					// two services get returned, indicating that there are two services with the
+					// same name (i.e. they are provided by different service brokers)
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{
+							{
+								GUID:              "a-service-guid",
+								ServiceBrokerName: "some-broker",
+							},
+							{
+								GUID:              "another-service-guid",
+								ServiceBrokerName: "some-other-broker",
+							},
+						},
+						nil,
+						nil,
+					)
+				})
+
+				It("returns an error and warnings", func() {
+					Expect(fakeCloudControllerClient.GetSpaceServicesCallCount()).To(Equal(1))
+					spaceGUID, serviceFilter := fakeCloudControllerClient.GetSpaceServicesArgsForCall(0)
+					Expect(spaceGUID).Should(Equal("space-guid"))
+					Expect(serviceFilter).Should(Equal([]ccv2.Filter{{
+						Type:     constant.LabelFilter,
+						Operator: constant.EqualOperator,
+						Values:   []string{"service"},
+					}},
+					))
+
+					Expect(createServiceErr).To(MatchError(actionerror.DuplicateServiceError{Name: "service"}))
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(0))
+				})
+			})
+		})
+
+		When("a broker name is specified", func() {
+			var brokerName string
+
+			BeforeEach(func() {
+				brokerName = "some-broker"
+			})
+
+			JustBeforeEach(func() {
+				serviceInstance, createServiceWarnings, createServiceErr = actor.CreateServiceInstance("space-guid", "service", "service-plan", "service-instance", brokerName, map[string]interface{}{"some": "params"}, []string{"tag-1", "tag-2"})
+			})
+
+			When("the specified service broker exists", func() {
+				var returnedInstance ccv2.ServiceInstance
+
+				BeforeEach(func() {
+					returnedInstance = ccv2.ServiceInstance{
+						GUID:            "some-service-guid",
+						Name:            "service",
+						SpaceGUID:       "space-guid",
+						ServiceGUID:     "service-guid",
+						ServicePlanGUID: "service-plan-guid",
+						Type:            constant.ServiceInstanceTypeManagedService,
+						Tags:            []string{"some", "tags"},
+						DashboardURL:    "http://dashboard.com",
+						LastOperation:   ccv2.LastOperation{},
+					}
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{
+							{
+								GUID:              "a-service-guid",
+								ServiceBrokerName: "some-broker",
+							},
+							{
+								GUID:              "another-service-guid",
+								ServiceBrokerName: "some-other-broker",
+							},
+						},
+						nil,
+						nil,
+					)
+					fakeCloudControllerClient.GetServicePlansReturns(
+						[]ccv2.ServicePlan{
+							{
+								GUID: "a-random-service-plan-guid",
+								Name: "service-plan-2",
+							},
+							{
+								GUID: "the-service-plan-guid",
+								Name: "service-plan",
+							},
+						},
+						nil,
+						nil)
+					fakeCloudControllerClient.CreateServiceInstanceReturns(
+						returnedInstance,
+						ccv2.Warnings{"create-service-instance-warning"},
+						nil)
+				})
+
+				It("returns the service instance and warnings", func() {
+					By("getting the space services")
+					Expect(createServiceErr).ToNot(HaveOccurred())
+
+					Expect(fakeCloudControllerClient.GetSpaceServicesCallCount()).To(Equal(1))
+					spaceGUID, serviceFilters := fakeCloudControllerClient.GetSpaceServicesArgsForCall(0)
+					Expect(spaceGUID).To(Equal("space-guid"))
+					Expect(serviceFilters).To(Equal(
+						[]ccv2.Filter{
+							{
+								Type:     constant.LabelFilter,
+								Operator: constant.EqualOperator,
+								Values:   []string{"service"},
+							},
+						},
+					))
+
+					By("getting the plans of the service")
+					Expect(fakeCloudControllerClient.GetServicePlansCallCount()).To(Equal(1))
+					planFilter := fakeCloudControllerClient.GetServicePlansArgsForCall(0)
+					Expect(planFilter).To(Equal([]ccv2.Filter{{
+						Type:     constant.ServiceGUIDFilter,
+						Operator: constant.EqualOperator,
+						Values:   []string{"a-service-guid"},
+					}},
+					))
+
+					By("creating the service instance")
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(1))
+					spaceGUID, planGUID, serviceInstanceName, parameters, tags := fakeCloudControllerClient.CreateServiceInstanceArgsForCall(0)
+					Expect(serviceInstanceName).To(Equal("service-instance"))
+					Expect(spaceGUID).To(Equal("space-guid"))
+					Expect(planGUID).To(Equal("the-service-plan-guid"))
+					Expect(parameters).To(Equal(map[string]interface{}{
+						"some": "params",
+					}))
+					Expect(tags).To(ConsistOf("tag-1", "tag-2"))
+
+					Expect(serviceInstance).To(Equal(ServiceInstance(returnedInstance)))
+					Expect(createServiceWarnings).To(ConsistOf("create-service-instance-warning"))
+				})
+			})
+
+			When("the specified service broker is not present in the list of services accessible to the user", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{
+							{
+								GUID:              "a-service-guid",
+								ServiceBrokerName: "the-wrong-broker",
+							},
+							{
+								GUID:              "another-service-guid",
+								ServiceBrokerName: "not-this-broker-either",
+							},
+						},
+						nil,
+						nil,
+					)
+				})
+
+				It("returns the error", func() {
+					Expect(serviceInstance).To(Equal(ServiceInstance{}))
+					Expect(createServiceErr).To(MatchError(actionerror.ServiceAndBrokerCombinationNotFoundError{ServiceName: "service", BrokerName: brokerName}))
+
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(0))
+				})
+			})
+
+			When("the list of services does not include service broker names", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{
+							{GUID: "a-service-guid"},
+							{GUID: "another-service-guid"},
+						},
+						nil,
+						nil,
+					)
+				})
+
+				It("returns the appropriate error", func() {
+					Expect(serviceInstance).To(Equal(ServiceInstance{}))
+					Expect(createServiceErr).To(MatchError(actionerror.ServiceAndBrokerCombinationNotFoundError{ServiceName: "service", BrokerName: brokerName}))
+
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(0))
+				})
+			})
+
+			When("there is an error getting the list of space services", func() {
+				BeforeEach(func() {
+					fakeCloudControllerClient.GetSpaceServicesReturns(
+						[]ccv2.Service{{}},
+						ccv2.Warnings{"get-space-services-warning"},
+						errors.New("oh no"),
+					)
+				})
+
+				It("returns the error and warnings", func() {
+					Expect(serviceInstance).To(Equal(ServiceInstance{}))
+					Expect(createServiceErr).To(MatchError("oh no"))
+					Expect(createServiceWarnings).To(ConsistOf("get-space-services-warning"))
+
+					Expect(fakeCloudControllerClient.CreateServiceInstanceCallCount()).To(Equal(0))
+				})
+			})
+		})
+	})
+
 	Describe("ServiceInstance", func() {
 		DescribeTable("IsManaged",
 			func(iType constant.ServiceInstanceType, expected bool) {
@@ -63,7 +507,7 @@ var _ = Describe("Service Instance Actions", func() {
 			serviceInstance, warnings, executeErr = actor.GetServiceInstance(serviceInstanceGUID)
 		})
 
-		Context("when the service instance exists", func() {
+		When("the service instance exists", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetServiceInstanceReturns(ccv2.ServiceInstance{Name: "some-service-instance", GUID: "service-instance-guid"}, ccv2.Warnings{"service-instance-warnings"}, nil)
 			})
@@ -74,14 +518,14 @@ var _ = Describe("Service Instance Actions", func() {
 					GUID: "service-instance-guid",
 					Name: "some-service-instance",
 				}))
-				Expect(warnings).To(Equal(Warnings{"service-instance-warnings"}))
+				Expect(warnings).To(ConsistOf("service-instance-warnings"))
 
 				Expect(fakeCloudControllerClient.GetServiceInstanceCallCount()).To(Equal(1))
 				Expect(fakeCloudControllerClient.GetServiceInstanceArgsForCall(0)).To(Equal(serviceInstanceGUID))
 			})
 		})
 
-		Context("when the service instance does not exist", func() {
+		When("the service instance does not exist", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetServiceInstanceReturns(ccv2.ServiceInstance{}, ccv2.Warnings{"service-instance-warnings-1"}, ccerror.ResourceNotFoundError{})
 			})
@@ -92,7 +536,7 @@ var _ = Describe("Service Instance Actions", func() {
 			})
 		})
 
-		Context("when retrieving the application's bound services returns an error", func() {
+		When("retrieving the application's bound services returns an error", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -108,7 +552,7 @@ var _ = Describe("Service Instance Actions", func() {
 	})
 
 	Describe("GetServiceInstanceByNameAndSpace", func() {
-		Context("when the service instance exists", func() {
+		When("the service instance exists", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetSpaceServiceInstancesReturns(
 					[]ccv2.ServiceInstance{
@@ -129,7 +573,7 @@ var _ = Describe("Service Instance Actions", func() {
 					GUID: "some-service-instance-guid",
 					Name: "some-service-instance",
 				}))
-				Expect(warnings).To(Equal(Warnings{"foo"}))
+				Expect(warnings).To(ConsistOf("foo"))
 
 				Expect(fakeCloudControllerClient.GetSpaceServiceInstancesCallCount()).To(Equal(1))
 
@@ -146,7 +590,7 @@ var _ = Describe("Service Instance Actions", func() {
 			})
 		})
 
-		Context("when the service instance does not exists", func() {
+		When("the service instance does not exists", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetSpaceServiceInstancesReturns([]ccv2.ServiceInstance{}, nil, nil)
 			})
@@ -157,7 +601,7 @@ var _ = Describe("Service Instance Actions", func() {
 			})
 		})
 
-		Context("when the cloud controller client returns an error", func() {
+		When("the cloud controller client returns an error", func() {
 			var expectedError error
 
 			BeforeEach(func() {
@@ -189,7 +633,7 @@ var _ = Describe("Service Instance Actions", func() {
 			serviceInstances, warnings, executeErr = actor.GetServiceInstancesByApplication(appGUID)
 		})
 
-		Context("when the application has services bound", func() {
+		When("the application has services bound", func() {
 			var serviceBindings []ccv2.ServiceBinding
 
 			BeforeEach(func() {
@@ -202,7 +646,7 @@ var _ = Describe("Service Instance Actions", func() {
 				fakeCloudControllerClient.GetServiceBindingsReturns(serviceBindings, ccv2.Warnings{"service-bindings-warnings-1", "service-bindings-warnings-2"}, nil)
 			})
 
-			Context("when retrieving the service instances is successful", func() {
+			When("retrieving the service instances is successful", func() {
 				BeforeEach(func() {
 					fakeCloudControllerClient.GetServiceInstanceReturnsOnCall(0, ccv2.ServiceInstance{Name: "some-service-instance-1"}, ccv2.Warnings{"service-instance-warnings-1"}, nil)
 					fakeCloudControllerClient.GetServiceInstanceReturnsOnCall(1, ccv2.ServiceInstance{Name: "some-service-instance-2"}, ccv2.Warnings{"service-instance-warnings-2"}, nil)
@@ -225,7 +669,7 @@ var _ = Describe("Service Instance Actions", func() {
 				})
 			})
 
-			Context("when retrieving the service instances returns an error", func() {
+			When("retrieving the service instances returns an error", func() {
 				var expectedErr error
 
 				BeforeEach(func() {
@@ -240,7 +684,7 @@ var _ = Describe("Service Instance Actions", func() {
 			})
 		})
 
-		Context("when the application has no services bound", func() {
+		When("the application has no services bound", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetServiceBindingsReturns(nil, ccv2.Warnings{"service-bindings-warnings-1", "service-bindings-warnings-2"}, nil)
 			})
@@ -252,7 +696,7 @@ var _ = Describe("Service Instance Actions", func() {
 			})
 		})
 
-		Context("when retrieving the application's bound services returns an error", func() {
+		When("retrieving the application's bound services returns an error", func() {
 			var expectedErr error
 
 			BeforeEach(func() {
@@ -268,7 +712,7 @@ var _ = Describe("Service Instance Actions", func() {
 	})
 
 	Describe("GetServiceInstancesBySpace", func() {
-		Context("when there are service instances", func() {
+		When("there are service instances", func() {
 			BeforeEach(func() {
 				fakeCloudControllerClient.GetSpaceServiceInstancesReturns(
 					[]ccv2.ServiceInstance{
@@ -310,7 +754,7 @@ var _ = Describe("Service Instance Actions", func() {
 			})
 		})
 
-		Context("when the cloud controller client returns an error", func() {
+		When("the cloud controller client returns an error", func() {
 			var expectedError error
 
 			BeforeEach(func() {

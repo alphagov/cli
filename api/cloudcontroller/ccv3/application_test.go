@@ -8,6 +8,7 @@ import (
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccerror"
 	. "code.cloudfoundry.org/cli/api/cloudcontroller/ccv3"
 	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/constant"
+	"code.cloudfoundry.org/cli/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/ghttp"
@@ -17,7 +18,7 @@ var _ = Describe("Application", func() {
 	var client *Client
 
 	BeforeEach(func() {
-		client = NewTestClient()
+		client, _ = NewTestClient()
 	})
 
 	Describe("Application", func() {
@@ -37,7 +38,7 @@ var _ = Describe("Application", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			Context("when no lifecycle is provided", func() {
+			When("no lifecycle is provided", func() {
 				BeforeEach(func() {
 					app = Application{}
 				})
@@ -47,7 +48,7 @@ var _ = Describe("Application", func() {
 				})
 			})
 
-			Context("when lifecycle type docker is provided", func() {
+			When("lifecycle type docker is provided", func() {
 				BeforeEach(func() {
 					app = Application{
 						LifecycleType: constant.AppLifecycleTypeDocker,
@@ -59,44 +60,107 @@ var _ = Describe("Application", func() {
 				})
 			})
 
-			Context("when lifecycle type buildpack is provided", func() {
+			When("lifecycle type buildpack is provided", func() {
 				BeforeEach(func() {
 					app.LifecycleType = constant.AppLifecycleTypeBuildpack
 				})
 
-				Context("when no buildpacks are provided", func() {
+				When("no buildpacks are provided", func() {
 					It("omits the lifecycle from the JSON", func() {
-						Expect(string(appBytes)).To(Equal("{}"))
+						Expect(string(appBytes)).To(MatchJSON("{}"))
+					})
+
+					When("but you do specify a stack", func() {
+						BeforeEach(func() {
+							app.StackName = "cflinuxfs9000"
+						})
+
+						It("does, in fact, send the stack in the json", func() {
+							Expect(string(appBytes)).To(MatchJSON(`{"lifecycle":{"data":{"stack":"cflinuxfs9000"},"type":"buildpack"}}`))
+						})
 					})
 				})
 
-				Context("when default buildpack is provided", func() {
+				When("default buildpack is provided", func() {
 					BeforeEach(func() {
 						app.LifecycleBuildpacks = []string{"default"}
 					})
 
 					It("sets the lifecycle buildpack to be empty in the JSON", func() {
-						Expect(string(appBytes)).To(Equal(`{"lifecycle":{"data":{"buildpacks":null},"type":"buildpack"}}`))
+						Expect(string(appBytes)).To(MatchJSON(`{"lifecycle":{"data":{"buildpacks":null},"type":"buildpack"}}`))
 					})
 				})
 
-				Context("when null buildpack is provided", func() {
+				When("null buildpack is provided", func() {
 					BeforeEach(func() {
 						app.LifecycleBuildpacks = []string{"null"}
 					})
 
 					It("sets the Lifecycle buildpack to be empty in the JSON", func() {
-						Expect(string(appBytes)).To(Equal(`{"lifecycle":{"data":{"buildpacks":null},"type":"buildpack"}}`))
+						Expect(string(appBytes)).To(MatchJSON(`{"lifecycle":{"data":{"buildpacks":null},"type":"buildpack"}}`))
 					})
 				})
 
-				Context("when other buildpacks are provided", func() {
+				When("other buildpacks are provided", func() {
 					BeforeEach(func() {
 						app.LifecycleBuildpacks = []string{"some-buildpack"}
 					})
 
 					It("sets them in the JSON", func() {
-						Expect(string(appBytes)).To(Equal(`{"lifecycle":{"data":{"buildpacks":["some-buildpack"]},"type":"buildpack"}}`))
+						Expect(string(appBytes)).To(MatchJSON(`{"lifecycle":{"data":{"buildpacks":["some-buildpack"]},"type":"buildpack"}}`))
+					})
+				})
+			})
+
+			When("metadata is provided", func() {
+				BeforeEach(func() {
+					app = Application{
+						Metadata: struct {
+							Labels map[string]types.NullString `json:"labels,omitempty"`
+						}{
+							Labels: map[string]types.NullString{
+								"some-key":  types.NewNullString("some-value"),
+								"other-key": types.NewNullString("other-value")},
+						},
+					}
+				})
+
+				It("should include the labels in the JSON", func() {
+					Expect(string(appBytes)).To(MatchJSON(`{
+						"metadata": {
+							"labels": {
+								"some-key":"some-value",
+								"other-key":"other-value"
+							}
+						}
+					}`))
+				})
+
+				When("labels need to be removed", func() {
+					BeforeEach(func() {
+						app = Application{
+							Metadata: struct {
+								Labels map[string]types.NullString `json:"labels,omitempty"`
+							}{
+								Labels: map[string]types.NullString{
+									"some-key":      types.NewNullString("some-value"),
+									"other-key":     types.NewNullString("other-value"),
+									"key-to-delete": types.NewNullString(),
+								},
+							},
+						}
+					})
+
+					It("should send nulls for those lables", func() {
+						Expect(string(appBytes)).To(MatchJSON(`{
+						"metadata": {
+							"labels": {
+								"some-key":"some-value",
+								"other-key":"other-value",
+								"key-to-delete":null
+							}
+						}
+					}`))
 					})
 				})
 			})
@@ -111,6 +175,7 @@ var _ = Describe("Application", func() {
 
 			BeforeEach(func() {
 				appBytes = []byte("{}")
+				app = Application{}
 			})
 
 			JustBeforeEach(func() {
@@ -118,7 +183,7 @@ var _ = Describe("Application", func() {
 				Expect(err).ToNot(HaveOccurred())
 			})
 
-			Context("when no lifecycle is provided", func() {
+			When("no lifecycle is provided", func() {
 				BeforeEach(func() {
 					appBytes = []byte("{}")
 				})
@@ -128,7 +193,7 @@ var _ = Describe("Application", func() {
 				})
 			})
 
-			Context("when lifecycle type docker is provided", func() {
+			When("lifecycle type docker is provided", func() {
 				BeforeEach(func() {
 					appBytes = []byte(`{"lifecycle":{"type":"docker","data":{}}}`)
 				})
@@ -139,9 +204,9 @@ var _ = Describe("Application", func() {
 				})
 			})
 
-			Context("when lifecycle type buildpack is provided", func() {
+			When("lifecycle type buildpack is provided", func() {
 
-				Context("when other buildpacks are provided", func() {
+				When("other buildpacks are provided", func() {
 					BeforeEach(func() {
 						appBytes = []byte(`{"lifecycle":{"data":{"buildpacks":["some-buildpack"]},"type":"buildpack"}}`)
 					})
@@ -152,6 +217,24 @@ var _ = Describe("Application", func() {
 							LifecycleBuildpacks: []string{"some-buildpack"},
 						}))
 					})
+				})
+			})
+
+			When("Labels are provided", func() {
+				BeforeEach(func() {
+					appBytes = []byte(`{"metadata":{"labels":{"some-key":"some-value"}}}`)
+				})
+
+				It("sets the labels", func() {
+					Expect(app).To(Equal(Application{
+						Metadata: struct {
+							Labels map[string]types.NullString `json:"labels,omitempty"`
+						}{
+							Labels: map[string]types.NullString{
+								"some-key": types.NewNullString("some-value"),
+							},
+						},
+					}))
 				})
 			})
 		})
@@ -170,7 +253,7 @@ var _ = Describe("Application", func() {
 			createdApp, warnings, executeErr = client.CreateApplication(appToCreate)
 		})
 
-		Context("when the application successfully is created", func() {
+		When("the application successfully is created", func() {
 			BeforeEach(func() {
 				response := `{
 					"guid": "some-app-guid",
@@ -214,7 +297,7 @@ var _ = Describe("Application", func() {
 			})
 		})
 
-		Context("when the caller specifies a buildpack", func() {
+		When("the caller specifies a buildpack", func() {
 			BeforeEach(func() {
 				response := `{
 					"guid": "some-app-guid",
@@ -274,7 +357,7 @@ var _ = Describe("Application", func() {
 			})
 		})
 
-		Context("when cc returns back an error or warnings", func() {
+		When("cc returns back an error or warnings", func() {
 			BeforeEach(func() {
 				response := `{
   "errors": [
@@ -299,20 +382,18 @@ var _ = Describe("Application", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -334,7 +415,7 @@ var _ = Describe("Application", func() {
 			apps, warnings, executeErr = client.GetApplications(filters...)
 		})
 
-		Context("when applications exist", func() {
+		When("applications exist", func() {
 			BeforeEach(func() {
 				response1 := fmt.Sprintf(`{
 	"pagination": {
@@ -398,6 +479,7 @@ var _ = Describe("Application", func() {
 					Application{
 						Name:                "app-name-1",
 						GUID:                "app-guid-1",
+						StackName:           "some-stack",
 						LifecycleType:       constant.AppLifecycleTypeBuildpack,
 						LifecycleBuildpacks: []string{"some-buildpack"},
 					},
@@ -407,7 +489,7 @@ var _ = Describe("Application", func() {
 			})
 		})
 
-		Context("when the cloud controller returns errors and warnings", func() {
+		When("the cloud controller returns errors and warnings", func() {
 			BeforeEach(func() {
 				response := `{
   "errors": [
@@ -432,20 +514,18 @@ var _ = Describe("Application", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -467,7 +547,7 @@ var _ = Describe("Application", func() {
 			updatedApp, warnings, executeErr = client.UpdateApplication(appToUpdate)
 		})
 
-		Context("when the application successfully is updated", func() {
+		When("the application successfully is updated", func() {
 			BeforeEach(func() {
 				response := `{
 					"guid": "some-app-guid",
@@ -475,7 +555,8 @@ var _ = Describe("Application", func() {
 					"lifecycle": {
 						"type": "buildpack",
 						"data": {
-							"buildpacks": ["some-buildpack"]
+							"buildpacks": ["some-buildpack"],
+							"stack": "some-stack-name"
 						}
 					}
 				}`
@@ -486,6 +567,7 @@ var _ = Describe("Application", func() {
 						"type": "buildpack",
 						"data": map[string]interface{}{
 							"buildpacks": []string{"some-buildpack"},
+							"stack":      "some-stack-name",
 						},
 					},
 					"relationships": map[string]interface{}{
@@ -507,6 +589,7 @@ var _ = Describe("Application", func() {
 				appToUpdate = Application{
 					GUID:                "some-app-guid",
 					Name:                "some-app-name",
+					StackName:           "some-stack-name",
 					LifecycleType:       constant.AppLifecycleTypeBuildpack,
 					LifecycleBuildpacks: []string{"some-buildpack"},
 					Relationships: Relationships{
@@ -521,6 +604,7 @@ var _ = Describe("Application", func() {
 
 				Expect(updatedApp).To(Equal(Application{
 					GUID:                "some-app-guid",
+					StackName:           "some-stack-name",
 					LifecycleBuildpacks: []string{"some-buildpack"},
 					LifecycleType:       constant.AppLifecycleTypeBuildpack,
 					Name:                "some-app-name",
@@ -528,7 +612,7 @@ var _ = Describe("Application", func() {
 			})
 		})
 
-		Context("when cc returns back an error or warnings", func() {
+		When("cc returns back an error or warnings", func() {
 			BeforeEach(func() {
 				response := `{
   "errors": [
@@ -557,20 +641,18 @@ var _ = Describe("Application", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -590,7 +672,7 @@ var _ = Describe("Application", func() {
 			responseApp, warnings, executeErr = client.UpdateApplicationStop("some-app-guid")
 		})
 
-		Context("when the response succeeds", func() {
+		When("the response succeeds", func() {
 			BeforeEach(func() {
 				response := `
 {
@@ -617,7 +699,7 @@ var _ = Describe("Application", func() {
 			})
 		})
 
-		Context("when the CC returns an error", func() {
+		When("the CC returns an error", func() {
 			BeforeEach(func() {
 				response := `{
   "errors": [
@@ -642,20 +724,18 @@ var _ = Describe("Application", func() {
 			})
 
 			It("returns no app, the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
@@ -675,7 +755,7 @@ var _ = Describe("Application", func() {
 			app, warnings, executeErr = client.UpdateApplicationStart("some-app-guid")
 		})
 
-		Context("when the response succeeds", func() {
+		When("the response succeeds", func() {
 			BeforeEach(func() {
 				response := `
 {
@@ -697,7 +777,7 @@ var _ = Describe("Application", func() {
 			})
 		})
 
-		Context("when cc returns back an error or warnings", func() {
+		When("cc returns back an error or warnings", func() {
 			BeforeEach(func() {
 				response := `{
   "errors": [
@@ -722,20 +802,101 @@ var _ = Describe("Application", func() {
 			})
 
 			It("returns the error and all warnings", func() {
-				Expect(executeErr).To(MatchError(ccerror.V3UnexpectedResponseError{
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
 					ResponseCode: http.StatusTeapot,
-					V3ErrorResponse: ccerror.V3ErrorResponse{
-						Errors: []ccerror.V3Error{
-							{
-								Code:   10008,
-								Detail: "The request is semantically invalid: command presence",
-								Title:  "CF-UnprocessableEntity",
-							},
-							{
-								Code:   10010,
-								Detail: "App not found",
-								Title:  "CF-ResourceNotFound",
-							},
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
+						},
+					},
+				}))
+				Expect(warnings).To(ConsistOf("this is a warning"))
+			})
+		})
+	})
+
+	Describe("UpdateApplicationRestart", func() {
+		var (
+			responseApp Application
+			warnings    Warnings
+			executeErr  error
+		)
+
+		JustBeforeEach(func() {
+			responseApp, warnings, executeErr = client.UpdateApplicationRestart("some-app-guid")
+		})
+
+		When("the response succeeds", func() {
+			BeforeEach(func() {
+				response := `
+{
+	"guid": "some-app-guid",
+	"name": "some-app",
+	"state": "STARTED"
+}`
+				server.AppendHandlers(
+					CombineHandlers(
+						VerifyRequest(http.MethodPost, "/v3/apps/some-app-guid/actions/restart"),
+						RespondWith(http.StatusOK, response, http.Header{"X-Cf-Warnings": {"this is a warning"}}),
+					),
+				)
+			})
+
+			It("returns the application, warnings, and no error", func() {
+				Expect(responseApp).To(Equal(Application{
+					GUID:  "some-app-guid",
+					Name:  "some-app",
+					State: constant.ApplicationStarted,
+				}))
+				Expect(executeErr).ToNot(HaveOccurred())
+				Expect(warnings).To(ConsistOf("this is a warning"))
+			})
+		})
+
+		When("the CC returns an error", func() {
+			BeforeEach(func() {
+				response := `{
+  "errors": [
+    {
+      "code": 10008,
+      "detail": "The request is semantically invalid: command presence",
+      "title": "CF-UnprocessableEntity"
+    },
+    {
+      "code": 10010,
+      "detail": "App not found",
+      "title": "CF-ResourceNotFound"
+    }
+  ]
+}`
+				server.AppendHandlers(
+					CombineHandlers(
+						VerifyRequest(http.MethodPost, "/v3/apps/some-app-guid/actions/restart"),
+						RespondWith(http.StatusTeapot, response, http.Header{"X-Cf-Warnings": {"this is a warning"}}),
+					),
+				)
+			})
+
+			It("returns no app, the error and all warnings", func() {
+				Expect(executeErr).To(MatchError(ccerror.MultiError{
+					ResponseCode: http.StatusTeapot,
+					Errors: []ccerror.V3Error{
+						{
+							Code:   10008,
+							Detail: "The request is semantically invalid: command presence",
+							Title:  "CF-UnprocessableEntity",
+						},
+						{
+							Code:   10010,
+							Detail: "App not found",
+							Title:  "CF-ResourceNotFound",
 						},
 					},
 				}))
